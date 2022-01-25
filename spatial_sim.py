@@ -175,7 +175,7 @@ if __name__ == '__main__':
     
     # write to a wav file
     filename = "test_audio_files/piano_test_azi" + str(azimuth) + "_elev" + str(elevation) + ".wav"
-    scipy.io.wavfile.write(filename, int(hrtf_sampling_rate), norm)
+    scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
     
     # plot Data.IR at M=5 for E=0
     # legend = []
