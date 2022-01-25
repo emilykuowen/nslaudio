@@ -111,8 +111,15 @@ if __name__ == '__main__':
     HRTF = sofa.Database.open(HRTF_path)
     HRTF.Metadata.dump()
 
-    measurement = 100
     emitter = 0
+
+    print("Azimuth: ")
+    azimuth = int(input(""))
+    print("Elevation: ")
+    elevation = int(input(""))
+    positions = HRTF.Source.Position.get_values(system="spherical")
+    measurement = find_measurement(azimuth, elevation, positions)
+
     # plot source positions
     source_positions = HRTF.Source.Position.get_values(system="cartesian")
     print(source_positions[measurement])
