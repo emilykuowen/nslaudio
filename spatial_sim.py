@@ -122,13 +122,10 @@ if __name__ == '__main__':
     each elevation (all angles in degrees).  A total of 710 locations were
     sampled.
     """
-    
+
     HRTF_path = "mit_kemar_normal_pinna.sofa"
     HRTF = sofa.Database.open(HRTF_path)
     HRTF.Metadata.dump()
-
-    measurement = 100
-    emitter = 0
 
     # plot source positions
     # cartesian_source_positions = HRTF.Source.Position.get_values(system="cartesian")
@@ -141,10 +138,11 @@ if __name__ == '__main__':
     #     mywriter = csv.writer(file, delimiter=',')
     #     mywriter.writerows(spherical_source_positions)
     
-    hrtf_sampling_rate = HRTF.Data.SamplingRate.get_values(indices={"M": measurement})
+    # hrtf_sampling_rate = HRTF.Data.SamplingRate.get_values(indices={"M": measurement})
     # print("hrtf sampling rate =", hrtf_sampling_rate)
     # plot_coordinates(source_positions, 'Source positions')
 
+    emitter = 0
     azimuth = int(input("Enter azimuth angle: "))
     elevation = int(input("Enter elevation angle: "))
     measurement = find_measurement(azimuth, elevation, spherical_source_positions)
