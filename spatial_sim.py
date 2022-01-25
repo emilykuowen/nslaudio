@@ -77,6 +77,18 @@ def on_shift():
     z = z - 10
 """
 
+def find_measurement(az, ele, positions):
+    best_fit = 0
+    best_error = abs(az - positions[0][0]) + abs(ele - positions[0][1])
+    for i in range(len(positions)):
+        diff_az = abs(az - positions[i][0])
+        diff_ele = abs(az - positions[i][1])
+        if((diff_az + diff_ele) < best_error):
+            best_fit = i
+            best_error = (diff_az + diff_ele)
+
+    return best_fit
+
 def plot_coordinates(coords, title):
     x0 = coords
     n0 = coords
