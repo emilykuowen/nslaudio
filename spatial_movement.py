@@ -167,17 +167,23 @@ if __name__ == '__main__':
         measurement = find_measurement(azimuth, elevation, spherical_source_positions)
         hrtf1 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
         hrtf2 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
+        
         len_diff = chunk_len - len(hrtf1)
         print('len_diff = ', len_diff)
-
+        
         # zeropad hrtf at the end to make it the same length as the chunk
         hrtf1_padded = np.pad(hrtf1, (0, len_diff), 'constant')
         hrtf2_padded = np.pad(hrtf2, (0, len_diff), 'constant')
         print('hrtf1_padded_len = ', len(hrtf1_padded))
         print('hrtf2_padded_len = ', len(hrtf2_padded))
 
-        convolved1 = np.array(signal.convolve(audio_np_array[i*chunk_len:(i+1)*chunk_len-1, 0], hrtf1_padded, mode='same'))
-        convolved2 = np.array(signal.convolve(audio_np_array[i*chunk_len:(i+1)*chunk_len-1, 1], hrtf2_padded, mode='same'))
+        start_index = i*chunk_len
+        end_index = (i+1)*chunk_len-1
+        print('start_index = ', start_index)
+        print('end_index = ', end_index)  
+        
+        convolved1 = np.array(signal.convolve(audio_np_array[start_index:end_index, 0], hrtf1_padded, mode='same'))
+        convolved2 = np.array(signal.convolve(audio_np_array[start_index:end_index, 1], hrtf2_padded, mode='same'))
         print('convolved1_len = ', len(convolved1))
         print('convolved2_len = ', len(convolved2))
 
@@ -187,8 +193,10 @@ if __name__ == '__main__':
     # write to a wav file
     comb = np.array([convolved_channel1, convolved_channel2]).T
     norm = np.array(normalize(comb))
-    comb2 = np.int16(norm/np.max(np.abs(norm)) * 32767)
-    filename = "test_audio_files/piano_test_surround.wav"
+    num_bit = 16
+    bit_depth = 2 ** (num_bit-1)
+    comb2 = np.int16(norm/np.max(np.abs(norm)) * bit_depth-1)
+    filename = "test_audio_files/piano_test_surround" + str(bit_depth-1) + ".wav"
     # scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
     scipy.io.wavfile.write(filename, int(segment.frame_rate), comb2)
 
