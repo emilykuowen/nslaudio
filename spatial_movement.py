@@ -189,7 +189,8 @@ if __name__ == '__main__':
     norm = np.array(normalize(comb))
     comb2 = np.int16(norm/np.max(np.abs(norm)) * 32767)
     filename = "test_audio_files/piano_test_surround.wav"
-    scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
+    # scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
+    scipy.io.wavfile.write(filename, int(segment.frame_rate), comb2)
 
     # global pitch, roll, yaw, x, y, z
     # audiofile = load_file("piano2.wav")
