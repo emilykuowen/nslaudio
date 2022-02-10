@@ -143,28 +143,32 @@ if __name__ == '__main__':
 
     emitter = 0
 
-    segment = AudioSegment.from_mp3('piano.mp3')
+    filename = 'piano.mp3'
+    segment = AudioSegment.from_file(filename)
     channel_sounds = segment.split_to_mono()
     samples = [s.get_array_of_samples() for s in channel_sounds]
     audio_np_array = np.array(samples).T
     audio_len = audio_np_array.shape[0]
     hrtf_len = len(HRTF.Data.IR.get_values(indices={"M":0, "R":0, "E":emitter}))
-    print('hrtf_len = ', hrtf_len)
+    # print('hrtf_len = ', hrtf_len)
 
-    num_angles = audio_len // hrtf_len
-    print('num_angles = ', num_angles)
+    # num_angles = audio_len // hrtf_len
+    azimuth_resolution = 5
+    num_angles = 360 // azimuth_resolution
+    # print('num_angles = ', num_angles)
     
     chunk_len = audio_len // num_angles
-    print('chunk_len = ', chunk_len)
+    # print('chunk_len = ', chunk_len)
 
     convolved_channel1 = np.zeros(1)
     convolved_channel2 = np.zeros(1)
 
     for i in range(num_angles):
-        azimuth = i * (360 / num_angles)
-        print('azimuth = ', azimuth)
+        azimuth = i * (360 // num_angles)
+        print('expected azimuth = ', azimuth)
         elevation = 0
         measurement = find_measurement(azimuth, elevation, spherical_source_positions)
+        print('actual azimuth = ', spherical_source_positions[measurement][0])
         hrtf1 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
         hrtf2 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
         
@@ -172,18 +176,20 @@ if __name__ == '__main__':
         print('len_diff = ', len_diff)
         
         # zeropad hrtf at the end to make it the same length as the chunk
-        hrtf1_padded = np.pad(hrtf1, (0, len_diff), 'constant')
-        hrtf2_padded = np.pad(hrtf2, (0, len_diff), 'constant')
-        print('hrtf1_padded_len = ', len(hrtf1_padded))
-        print('hrtf2_padded_len = ', len(hrtf2_padded))
+        # hrtf1_padded = np.pad(hrtf1, (0, len_diff), 'constant')
+        # hrtf2_padded = np.pad(hrtf2, (0, len_diff), 'constant')
+        # print('hrtf1_padded_len = ', len(hrtf1_padded))
+        # print('hrtf2_padded_len = ', len(hrtf2_padded))
 
         start_index = i*chunk_len
         end_index = (i+1)*chunk_len-1
         print('start_index = ', start_index)
         print('end_index = ', end_index)  
         
-        convolved1 = np.array(signal.convolve(audio_np_array[start_index:end_index, 0], hrtf1_padded, mode='same'))
-        convolved2 = np.array(signal.convolve(audio_np_array[start_index:end_index, 1], hrtf2_padded, mode='same'))
+        convolved1 = np.array(signal.convolve(audio_np_array[start_index:end_index, 0], hrtf1, mode='full'))
+        convolved2 = np.array(signal.convolve(audio_np_array[start_index:end_index, 1], hrtf2, mode='full'))
+        convolved1 = np.trim_zeros(convolved1)
+        convolved2 = np.trim_zeros(convolved2)
         print('convolved1_len = ', len(convolved1))
         print('convolved2_len = ', len(convolved2))
 
@@ -196,7 +202,7 @@ if __name__ == '__main__':
     num_bit = 16
     bit_depth = 2 ** (num_bit-1)
     comb2 = np.int16(norm/np.max(np.abs(norm)) * bit_depth-1)
-    filename = "test_audio_files/piano_test_surround" + str(bit_depth-1) + ".wav"
+    filename = "test_audio_files/" + filename.partition('.')[0] + "_surround_" + str(bit_depth-1) + ".wav"
     # scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
     scipy.io.wavfile.write(filename, int(segment.frame_rate), comb2)
 
