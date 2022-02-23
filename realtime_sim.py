@@ -41,7 +41,7 @@ class AudioFile:
         self.stream.close()
         self.p.terminate()
 
-class hrtfFile:
+class HRTFFile:
     emitter = 0
 
     def __init__(self, file):
@@ -96,7 +96,7 @@ class Scene:
     def __init__(self, sourceFilename, HRTFFilename):
         """ Initialize """
         self.listener = Listener()
-        self.HRTF = hrtfFile(HRTFFilename)
+        self.HRTF = HRTFFile(HRTFFilename)
         #TODO use sourceFilename to open a .txt file (or something else) and create an array of source objects to store in self.sources[] array 
         self.sources = []
         self.stream = AudioStream()
