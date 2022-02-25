@@ -79,16 +79,30 @@ class Listener:
         self.xPos = 0
         self.yPos = 0
         self.zPos = 0
+        self.azimuthTilt = 0
+        self.elevationTilt = 0
+        keyboard.add_hotkey('up', self.update(0, 1, 0, 0, 0))
+        keyboard.add_hotkey('down', self.update(0, -1, 0, 0, 0))
+        keyboard.add_hotkey('right', self.update(1, 0, 0, 0, 0))
+        keyboard.add_hotkey('left', self.update(-1, 0, 0, 0, 0))
+        keyboard.add_hotkey('w', self.update(0, 0, 0, 0, 1))
+        keyboard.add_hotkey('a', self.update(0, 0, 0, 1, 0))
+        keyboard.add_hotkey('s', self.update(0, 0, 0, 0, -1))
+        keyboard.add_hotkey('d', self.update(0, 0, 0, -1, 0))
+        keyboard.add_hotkey('space', self.update(0, 0, 1, 0, 0))
+        keyboard.add_hotkey('shift', self.update(0, 0, -1, 0, 0))
 
     def getPos(self):
         """ Access position info """
         return [self.xPos, self.yPos, self.zPos]
 
-    def update(self, x, y, z):
+    def update(self, x, y, z, az, el):
         """ Update position """
-        self.xPos = x
-        self.yPos = y
-        self.zPos = z
+        self.xPos = self.xPos + x
+        self.yPos = self.yPos + y
+        self.zPos = self.zPos + z
+        self.azimuthTilt = self.azimuthTilt + az
+        self.elevationTilt = self.elevationTilt + el
 
 
 class Scene:
@@ -100,16 +114,38 @@ class Scene:
         #TODO use sourceFilename to open a .txt file (or something else) and create an array of source objects to store in self.sources[] array 
         self.sources = []
         self.stream = AudioStream()
+        self.exit = False
+        self.chunkSize = 1024
+        self.timeIndex = 0
+        self.fs = 44100
 
-    def generateChunk(self):
+    def begin():
+        self.exit = False
+        keyboard.add_hotkey('q', self.quit())
+        while(~self.exit):
+            start_time = time.time()
+            chunkTime = self.fs * self.chunkSize
+            self.generateChunk(self.timeIndex, self.chunkSize)
+            while(time.time()-start_time < chunktime):
+                pass
+                
+            self.timeIndex = self.timeIndex + self.chunkSize
+
+    def quit():
+        self.exit = True
+
+    def generateChunk(self, timeIndex, chunkSize):
         """" Generate and queue an audio chunk """
         #TODO as this is, it will spatialize an entire source object audio file every time this is called. Next, this needs to be split to play a smaller chunk at a time
         for currSource in self.sources:
             [azimuth, elevation] = getAngles(currSource)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
 
-            convolved1 = np.array(signal.convolve(currSource.getSound(), hrtf1, mode='full'))
-            convolved2 = np.array(signal.convolve(currSource.getSound(), hrtf2, mode='full'))
+            soundFile = currSource.getSound()
+            soundChunk = soundFile[timeIndex:timeIndex+chunkSize]
+
+            convolved1 = np.array(signal.convolve(soundChunk, hrtf1, mode='full'))
+            convolved2 = np.array(signal.convolve(soundChunk, hrtf2, mode='full'))
 
             start_index = min(np.flatnonzero(convolved1)[0], np.flatnonzero(convolved2)[0])
             end_index = max(np.flatnonzero(convolved1)[len(np.flatnonzero(convolved1))-1], np.flatnonzero(convolved2)[len(np.flatnonzero(convolved2))-1])
@@ -167,8 +203,9 @@ class AudioStream:
 
 """ MAIN """
 
-## TODO Scene() create function to call generate chunk every "x" seconds
-## TODO Scene() Add keylisteners to update listener position
+#currentScene = Scene("sources.txt", "mit_kemar_normal_pinna.sofa")
+#currentScene.begin()
+
 ## TODO Scene(), Source() Figure out format for Source object files.
     ## Each source object should have some kind of txt or csv file containing info on its audio file and position data
     ## The sourceFilename string should be used to open a file or folder where we can parse that info, create a set of Source() objects, and place them in the Scene() self.sources() array
@@ -185,3 +222,4 @@ class AudioStream:
 #    a.stream.write(data_processed)
 #    data = a.wf.readframes(a.chunk)
 #a.close()
+
