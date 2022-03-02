@@ -15,6 +15,7 @@ import pyaudio
 import wave
 import sys
 import time
+import math
 
 class AudioFile:
     chunk = 1024
@@ -113,7 +114,7 @@ class Scene:
         self.listener = Listener()
         self.HRTF = HRTFFile(HRTFFilename)
         #TODO use sourceFilename to open a .txt file (or something else) and create an array of source objects to store in self.sources[] array 
-        self.sources = [1, 0, 0, "test.wav"]
+        self.sources = [Source(1, 0, 0, "test.wav")]
         self.stream = AudioStream()
         self.exit = False
         self.chunkSize = 1024
@@ -127,7 +128,7 @@ class Scene:
             start_time = time.time()
             chunkTime = self.fs * self.chunkSize
             self.generateChunk(self.timeIndex, self.chunkSize)
-            while(time.time()-start_time < chunktime):
+            while(time.time()-start_time < chunkTime):
                 pass
                 
             self.timeIndex = self.timeIndex + self.chunkSize
@@ -160,12 +161,19 @@ class Scene:
             self.stream.queueChunk([convolved1, convolved2])
 
     
-    def getAngles(self, source):
+    def getAngles(self, curr_source):
         """ Calculate azimuth and elevation angle from listener to object """
-        [sourceX, sourceY, sourceZ] = source.getPos()
-        # TODO calculate azimuth and elevation angles from a given source object and listener object
-        azimuth = 0
-        elevation = 0
+        [sourceX, sourceY, sourceZ] = curr_source.getPos()
+        [listenerX, listenerY, listenerZ] = self.listener.getPos()
+        
+        numerator = sourceY-listenerY
+        denominator = sourceX - listenerX
+        azimuth = math.atan(numerator/denominator)
+
+        numerator = sourceZ-listenerZ
+        denominator = sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
+        elevation = math.atan(numerator/denominator)
+
         return [azimuth, elivation]
 
 class Source:
