@@ -14,6 +14,7 @@ import wave
 import pyaudio
 import wave
 import sys
+import time
 
 class AudioFile:
     chunk = 1024
@@ -47,7 +48,7 @@ class HRTFFile:
     def __init__(self, file):
         """ Initialize """
         self.HRTFPath = file
-        self.HRTF = sofa.Database.open(HRTFPath)
+        self.HRTF = sofa.Database.open(self.HRTFPath)
         self.HRTF.Metadata.dump()
         self.sphericalPositions = self.HRTF.Source.Position.get_values(system="spherical")
         self.measurement = 0
@@ -112,14 +113,14 @@ class Scene:
         self.listener = Listener()
         self.HRTF = HRTFFile(HRTFFilename)
         #TODO use sourceFilename to open a .txt file (or something else) and create an array of source objects to store in self.sources[] array 
-        self.sources = []
+        self.sources = [1, 0, 0, "test.wav"]
         self.stream = AudioStream()
         self.exit = False
         self.chunkSize = 1024
         self.timeIndex = 0
         self.fs = 44100
 
-    def begin():
+    def begin(self):
         self.exit = False
         keyboard.add_hotkey('q', self.quit())
         while(~self.exit):
@@ -131,14 +132,14 @@ class Scene:
                 
             self.timeIndex = self.timeIndex + self.chunkSize
 
-    def quit():
+    def quit(self):
         self.exit = True
 
     def generateChunk(self, timeIndex, chunkSize):
         """" Generate and queue an audio chunk """
         #TODO as this is, it will spatialize an entire source object audio file every time this is called. Next, this needs to be split to play a smaller chunk at a time
         for currSource in self.sources:
-            [azimuth, elevation] = getAngles(currSource)
+            [azimuth, elevation] = self.getAngles(currSource)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
 
             soundFile = currSource.getSound()
@@ -194,7 +195,7 @@ class AudioStream:
     def __init__(self):
         """ Initialize """
         self.p = pyaudio.PyAudio()
-        self.stream = self.p.open(channels = 2, rate = 44100, output = True)
+        self.stream = self.p.open(format = self.p.get_format_from_width(4), channels = 2, rate = 44100, output = True)
     
     def queueChunk(self, chunk):
         """ Write audio to stream """
@@ -203,8 +204,8 @@ class AudioStream:
 
 """ MAIN """
 
-#currentScene = Scene("sources.txt", "mit_kemar_normal_pinna.sofa")
-#currentScene.begin()
+currentScene = Scene("sources.txt", "mit_kemar_normal_pinna.sofa")
+currentScene.begin()
 
 ## TODO Scene(), Source() Figure out format for Source object files.
     ## Each source object should have some kind of txt or csv file containing info on its audio file and position data
