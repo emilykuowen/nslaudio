@@ -54,13 +54,6 @@ class HRTFFile:
         self.sphericalPositions = self.HRTF.Source.Position.get_values(system="spherical")
         self.measurement = 0
 
-    def getIR(self, azimuth, elevation):
-        """ Access IR measurements """
-        self.measurement = findMeasurement(azimuth, elevation)
-        hrtf1 = HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":0, "E":self.emitter})
-        hrtf2 = HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":1, "E":self.emitter})
-        return [hrtf1, hrtf2]
-
     def findMeasurement(self, azimuth, elevation):
         """ Find closest IR measurement to target azimuth and elevation """
         bestIndex = 0
@@ -73,6 +66,14 @@ class HRTFFile:
                 bestIndex = i
                 bestError = currError
         return bestIndex
+
+    def getIR(self, azimuth, elevation):
+        """ Access IR measurements """
+        self.measurement = self.findMeasurement(azimuth, elevation)
+        hrtf1 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":0, "E":self.emitter})
+        hrtf2 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":1, "E":self.emitter})
+        return [hrtf1, hrtf2]
+
 
 class Listener:
     
@@ -138,7 +139,6 @@ class Scene:
 
     def generateChunk(self, timeIndex, chunkSize):
         """" Generate and queue an audio chunk """
-        #TODO as this is, it will spatialize an entire source object audio file every time this is called. Next, this needs to be split to play a smaller chunk at a time
         for currSource in self.sources:
             [azimuth, elevation] = self.getAngles(currSource)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
@@ -171,10 +171,10 @@ class Scene:
         azimuth = math.atan(numerator/denominator)
 
         numerator = sourceZ-listenerZ
-        denominator = sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
+        denominator = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
         elevation = math.atan(numerator/denominator)
 
-        return [azimuth, elivation]
+        return [azimuth, elevation]
 
 class Source:
 
