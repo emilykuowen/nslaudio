@@ -57,13 +57,6 @@ class HRTFFile:
         self.sphericalPositions = self.HRTF.Source.Position.get_values(system="spherical")
         self.measurement = 0
 
-    def getIR(self, azimuth, elevation):
-        """ Access IR measurements """
-        self.measurement = self.findMeasurement(azimuth, elevation)
-        hrtf1 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":0, "E":self.emitter})
-        hrtf2 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":1, "E":self.emitter})
-        return [hrtf1, hrtf2]
-
     def findMeasurement(self, azimuth, elevation):
         """ Find closest IR measurement to target azimuth and elevation """
         bestIndex = 0
@@ -76,6 +69,13 @@ class HRTFFile:
                 bestIndex = i
                 bestError = currError
         return bestIndex
+
+    def getIR(self, azimuth, elevation):
+        """ Access IR measurements """
+        self.measurement = self.findMeasurement(azimuth, elevation)
+        hrtf1 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":0, "E":self.emitter})
+        hrtf2 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":1, "E":self.emitter})
+        return [hrtf1, hrtf2]
 
 
 class Listener:
