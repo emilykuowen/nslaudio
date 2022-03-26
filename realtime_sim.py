@@ -59,6 +59,7 @@ class HRTFFile:
 
     def findMeasurement(self, azimuth, elevation):
         """ Find closest IR measurement to target azimuth and elevation """
+        # TODO try hashmap or binary search
         bestIndex = 0
         bestError = abs(azimuth - self.sphericalPositions[0][0]) + abs(elevation - self.sphericalPositions[0][1])
         for i in range(1, len(self.sphericalPositions)):
@@ -130,15 +131,19 @@ class Scene:
         # TODO make adding hotkey not call self.quit()
         # keyboard.add_hotkey('q', self.quit())
         chunkTime = 1.0 / self.fs * self.chunkSize
-        print(chunkTime)
+        print("chunk time = ", chunkTime)
 
         while(~self.exit):
             start_time = time.time()
             # TODO use a thread to separate generating and playing chunk
-            self.generateChunk(self.timeIndex, self.chunkSize)
-            print("current time = ", time.time() - start_time)
-            while((time.time() - start_time) < chunkTime):
-                pass
+            # TODO test code with writing audio data to an array instead of outputting right away
+            # TODO check how much time needs to be reduced / optimized
+            convolved_final = self.generateChunk(self.timeIndex, self.chunkSize)
+            print("chunk size = ", 1.0 / self.fs * len(convolved_final))
+            print("processing time = ", time.time() - start_time)
+            self.stream.queueChunk(convolved_final)
+            # while((time.time() - start_time) < chunkTime):
+            #     pass
             self.timeIndex = self.timeIndex + self.chunkSize
 
     def quit(self):
@@ -156,16 +161,18 @@ class Scene:
             soundFile = currSource.getSound()
             # TODO make this work for both mono and stereo files
             soundChunk = soundFile[timeIndex:timeIndex+chunkSize, 0]
+            print("sound chunk size = ", len(soundChunk))
 
             # TODO test using fft instead to see if it's faster
-            convolved1 = np.array(signal.convolve(soundChunk, hrtf1, mode='full'))
-            convolved2 = np.array(signal.convolve(soundChunk, hrtf2, mode='full'))
+            convolved1 = np.array(signal.fftconvolve(soundChunk, hrtf1, mode='full'))
+            convolved2 = np.array(signal.fftconvolve(soundChunk, hrtf2, mode='full'))
+            print("convolved1 size = ", len(convolved1))
+            print("convolved2 size = ", len(convolved2))
 
-            start_index = min(np.flatnonzero(convolved1)[0], np.flatnonzero(convolved2)[0])
-            end_index = max(np.flatnonzero(convolved1)[len(np.flatnonzero(convolved1))-1], np.flatnonzero(convolved2)[len(np.flatnonzero(convolved2))-1])
-
-            convolved1 = convolved1[start_index:end_index]
-            convolved2 = convolved2[start_index:end_index]
+            # start_index = min(np.flatnonzero(convolved1)[0], np.flatnonzero(convolved2)[0])
+            # end_index = max(np.flatnonzero(convolved1)[len(np.flatnonzero(convolved1))-1], np.flatnonzero(convolved2)[len(np.flatnonzero(convolved2))-1])
+            # convolved1 = convolved1[start_index:end_index]
+            # convolved2 = convolved2[start_index:end_index]   
 
             #TODO adjust gain for inverse squared distance relationship
 
@@ -176,7 +183,7 @@ class Scene:
             num_bit = 16
             bit_depth = 2 ** (num_bit-1)
             convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
-            self.stream.queueChunk(convolved_final.tobytes())
+            return convolved_final.tobytes()
 
     # will have to take in the listener object as an argument
     def getAngles(self, source):
