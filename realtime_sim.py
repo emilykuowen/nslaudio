@@ -108,9 +108,10 @@ class Scene:
         """ Initialize """
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
-        self.sources = [Source(0, 0, 0, sourceFilename)]
-        self.stream = AudioStream(sourceFilename)
-        self.chunkSize = 8192 # the larger the chunk size, the less noise / pauses
+        self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
+        #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
+        self.stream = AudioStream("piano.wav")
+        self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
@@ -119,10 +120,7 @@ class Scene:
     def begin(self):
         # chunkTime = 1.0 / self.fs * self.chunkSize
         # print("chunk time = ", chunkTime)
-        chunk_size = 4096
-        data = self.stream.wf.readframes(chunk_size) # returns byte string
-        data_np = np.frombuffer(data, dtype=np.uint16) # returns int array of chunk_size if mono and chunk_size * 2 if stereo
-        
+
         # print(list(data))
         # print("data len = ", len(list(data)))
         # print(data_np)
@@ -130,37 +128,35 @@ class Scene:
 
         #while data != b'':
         while ~self.exit:
-            data_np = np.frombuffer(data, dtype=np.uint16)
             [x, y, z] = self.listener.getPos()
             print("POSITION x=", x, " y=", y, " z=", z)
-            convolved = self.generateChunk(data_np, chunk_size)
-            #self.stream.stream.write(convolved)
-            #data = self.stream.wf.readframes(chunk_size)
+            convolved = self.generateChunk()
+            self.stream.stream.write(convolved)
             
-            time.sleep(2)
+            #time.sleep(2)
 
     def quit(self):
         self.exit = True
 
-    def generateChunk(self, data, chunkSize):
+    def generateChunk(self):
         """" Generate an audio chunk """
+        flag = 0
         for currSource in self.sources:
+            data = currSource.getNextChunk(self.chunkSize) # returns byte string
+            data_np = np.frombuffer(data, dtype=np.uint16) # returns int array of chunk_size if mono and chunk_size * 2 if stereo
+
             [azimuth, elevation] = self.getAngles(currSource)
-            print("azimuth = ", azimuth)
-            print("elevation = ", elevation)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
-            convolved1 = np.array(signal.fftconvolve(data, hrtf1, mode='full'))
-            convolved2 = np.array(signal.fftconvolve(data, hrtf2, mode='full'))
+            
+            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full'))
+            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full'))
             
             #print("data len = ", len(data))
             #print("hrtf1 len = ", len(hrtf1))
+            #print("azimuth = ", azimuth)
+            #print("elevation = ", elevation)
             #print("convolved1 size = ", len(convolved1))
             #print("convolved2 size = ", len(convolved2)) 
-
-            # start_index = min(np.flatnonzero(convolved1)[0], np.flatnonzero(convolved2)[0])
-            # end_index = max(np.flatnonzero(convolved1)[len(np.flatnonzero(convolved1))-1], np.flatnonzero(convolved2)[len(np.flatnonzero(convolved2))-1])
-            # convolved1 = convolved1[start_index:end_index]
-            # convolved2 = convolved2[start_index:end_index]   
 
             #TODO adjust gain for inverse squared distance relationship
 
@@ -174,7 +170,18 @@ class Scene:
             convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
             interleaved = convolved_final.flatten()
             out_data = interleaved.tobytes()
-            return out_data
+
+            if(flag==0):
+                summed = convolved_final
+                flag = 1
+            else:
+                summed = summed + convolved_final
+        
+        summed = summed/len(self.sources)
+        interleaved = summed.flatten()
+        out_data = interleaved.tobytes()
+
+        return out_data
 
     def getAngles(self, source):
         """ Calculate azimuth and elevation angle from listener to object """
@@ -185,7 +192,6 @@ class Scene:
         denominator = sourceX - listenerX
         
         #CALCULATE AZIMUTH
-
         if(denominator == 0):
             if(sourceY >= listenerY):
                 azimuth = 0
@@ -198,10 +204,8 @@ class Scene:
                 azimuth = -90
         else:
             if((listenerY > sourceY)):
-                print("yes")
                 azimuth = math.degrees(math.atan(numerator / denominator) - math.pi)
             else:
-                print("no")
                 azimuth = math.degrees(math.atan(numerator / denominator))
         if(azimuth > 180):
             azimuth = -1* (360-abs(azimuth))
@@ -229,6 +233,8 @@ class Source:
         channel_sounds = segment.split_to_mono()
         samples = [s.get_array_of_samples() for s in channel_sounds]
         self.audioArray = np.array(samples).T
+
+        self.stream = AudioStream(filename)
     
     def getPos(self):
         """ Access position data """
@@ -237,18 +243,26 @@ class Source:
     def getSound(self):
         """ Access audio info """
         return self.audioArray
+    
+    def getStream(self):
+        return self.stream
+    
+    def getNextChunk(self, chunkSize):
+        return self.stream.wf.readframes(chunkSize)
+
+
 
 def on_press(key):
     global global_listener
     try:    
         if(key.char == 'w'):
-            global_listener.update(0, 0, 0, 1, 0)
+            global_listener.update(0, 0, 0, 10, 0)
         if(key.char == 'a'):
-            global_listener.update(0, 0, 0, 0, -1)
+            global_listener.update(0, 0, 0, 0, -10)
         if(key.char == 's'):
-            global_listener.update(0, 0, 0, -1, 0)
+            global_listener.update(0, 0, 0, -10, 0)
         if(key.char == 'd'):
-            global_listener.update(0, 0, 0, 0, 1)
+            global_listener.update(0, 0, 0, 0, 10)
         else:
             print("unknown input")
     except:
@@ -260,6 +274,10 @@ def on_press(key):
             global_listener.update(-1, 0, 0, 0, 0)
         elif(key == keyboard.Key.down):
             global_listener.update(0, -1, 0, 0, 0)
+        elif(key == keyboard.Key.space):
+            global_listener.update(0, 0, 1, 0, 0)
+        elif(key == keyboard.Key.shift):
+            global_listener.update(0, 0, -1, 0, 0)
         else:
             print("unknown input")
 
