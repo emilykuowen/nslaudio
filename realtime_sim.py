@@ -49,6 +49,7 @@ class AudioStream:
         self.stream.close()
         self.p.terminate()
 
+
 class HRTFFile:
     emitter = 0
 
@@ -103,124 +104,6 @@ class Listener:
         self.azimuthTilt = self.azimuthTilt + az
         self.elevationTilt = self.elevationTilt + el
 
-class Scene:
-    def __init__(self, sourceFilename, HRTFFilename, global_listener):
-        """ Initialize """
-        self.listener = global_listener
-        self.HRTF = HRTFFile(HRTFFilename)
-        self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
-        #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
-        self.stream = AudioStream("piano.wav")
-        self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
-        self.timeIndex = 0
-        self.fs = 44100
-        self.exit = False
-        
-
-    def begin(self):
-        # chunkTime = 1.0 / self.fs * self.chunkSize
-        # print("chunk time = ", chunkTime)
-
-        # print(list(data))
-        # print("data len = ", len(list(data)))
-        # print(data_np)
-        # print("data np len = ", len(data_np))
-
-        #while data != b'':
-        while ~self.exit:
-            [x, y, z] = self.listener.getPos()
-            print("POSITION x=", x, " y=", y, " z=", z)
-            convolved = self.generateChunk()
-            self.stream.stream.write(convolved)
-            
-            #time.sleep(2)
-
-    def quit(self):
-        self.exit = True
-
-    def generateChunk(self):
-        """" Generate an audio chunk """
-        flag = 0
-        for currSource in self.sources:
-            data = currSource.getNextChunk(self.chunkSize) # returns byte string
-            data_np = np.frombuffer(data, dtype=np.uint16) # returns int array of chunk_size if mono and chunk_size * 2 if stereo
-
-            [azimuth, elevation] = self.getAngles(currSource)
-            [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
-            
-            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full'))
-            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full'))
-            
-            #print("data len = ", len(data))
-            #print("hrtf1 len = ", len(hrtf1))
-            #print("azimuth = ", azimuth)
-            #print("elevation = ", elevation)
-            #print("convolved1 size = ", len(convolved1))
-            #print("convolved2 size = ", len(convolved2)) 
-
-            #TODO adjust gain for inverse squared distance relationship
-
-            convolved = np.array([convolved1, convolved2]).T
-            #print(convolved.shape)
-            norm = np.linalg.norm(convolved)
-            convolved_normalized = convolved / norm
-            #print(convolved_normalized.shape)
-            num_bit = 16
-            bit_depth = 2 ** (num_bit-1)
-            convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
-            interleaved = convolved_final.flatten()
-            out_data = interleaved.tobytes()
-
-            if(flag==0):
-                summed = convolved_final
-                flag = 1
-            else:
-                summed = summed + convolved_final
-        
-        summed = summed/len(self.sources)
-        interleaved = summed.flatten()
-        out_data = interleaved.tobytes()
-
-        return out_data
-
-    def getAngles(self, source):
-        """ Calculate azimuth and elevation angle from listener to object """
-        [sourceX, sourceY, sourceZ] = source.getPos()
-        [listenerX, listenerY, listenerZ] = self.listener.getPos()
-        
-        numerator = sourceY - listenerY
-        denominator = sourceX - listenerX
-        
-        #CALCULATE AZIMUTH
-        if(denominator == 0):
-            if(sourceY >= listenerY):
-                azimuth = 0
-            else:
-                azimuth = 180
-        elif(numerator == 0):
-            if(sourceX >= listenerX):
-                azimuth = 90
-            else:
-                azimuth = -90
-        else:
-            if((listenerY > sourceY)):
-                azimuth = math.degrees(math.atan(numerator / denominator) - math.pi)
-            else:
-                azimuth = math.degrees(math.atan(numerator / denominator))
-        if(azimuth > 180):
-            azimuth = -1* (360-abs(azimuth))
-        if(azimuth < -180):
-            azimuth = 360-abs(azimuth)
-
-        #TODO CALCULATE ELEVATION
-        #numerator = sourceZ - listenerZ
-        #denominator = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
-        #elevation = math.atan(numerator / denominator)
-
-        elevation = 0
-
-        return [azimuth, elevation]
-
 
 class Source:
     def __init__(self, x, y, z, filename):
@@ -251,6 +134,128 @@ class Source:
         return self.stream.wf.readframes(chunkSize)
 
 
+class Scene:
+    def __init__(self, sourceFilename, HRTFFilename, global_listener):
+        """ Initialize """
+        self.listener = global_listener
+        self.HRTF = HRTFFile(HRTFFilename)
+        self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
+        #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
+        self.stream = AudioStream("piano.wav")
+        self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
+        self.timeIndex = 0
+        self.fs = 44100
+        self.exit = False
+        
+
+    def begin(self):
+        # chunkTime = 1.0 / self.fs * self.chunkSize
+        # print("chunk time = ", chunkTime)
+
+        # print(list(data))
+        # print("data len = ", len(list(data)))
+        # print(data_np)
+        # print("data np len = ", len(data_np))
+
+        #while data != b'':
+        while ~self.exit:
+            [x, y, z] = self.listener.getPos()
+            print("POSITION x = ", x, " y = ", y, " z = ", z)
+            convolved = self.generateChunk()
+            self.stream.stream.write(convolved)
+            
+            #time.sleep(2)
+
+    def quit(self):
+        self.exit = True
+
+    def generateChunk(self):
+        """" Generate an audio chunk """
+        flag = 0
+
+        for currSource in self.sources:
+            data = currSource.getNextChunk(self.chunkSize) # returns byte string
+            data_np = np.frombuffer(data, dtype=np.uint16) # returns int array of chunk_size if mono and chunk_size * 2 if stereo
+
+            [azimuth, elevation] = self.getAngles(currSource)
+            [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
+            
+            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full'))
+            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full'))
+            
+            #print("data len = ", len(data))
+            #print("hrtf1 len = ", len(hrtf1))
+            #print("azimuth = ", azimuth)
+            #print("elevation = ", elevation)
+            #print("convolved1 size = ", len(convolved1))
+            #print("convolved2 size = ", len(convolved2)) 
+
+            #TODO adjust gain for inverse squared distance relationship
+
+            convolved = np.array([convolved1, convolved2]).T
+            #print(convolved.shape)
+            norm = np.linalg.norm(convolved)
+            convolved_normalized = convolved / norm
+            #print(convolved_normalized.shape)
+            num_bit = 16
+            bit_depth = 2 ** (num_bit-1)
+            convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
+            interleaved = convolved_final.flatten()
+            out_data = interleaved.tobytes()
+
+            if(flag == 0):
+                summed = convolved_final
+                flag = 1
+            else:
+                # gives me array size mismatch error sometimes
+                # do we not need to normalize this after summing different sources?
+                summed = summed + convolved_final
+        
+        # what is the goal of dividing?
+        summed = summed/len(self.sources)
+        interleaved = summed.flatten()
+        out_data = interleaved.tobytes()
+
+        return out_data
+
+    def getAngles(self, source):
+        """ Calculate azimuth and elevation angle from listener to object """
+        [sourceX, sourceY, sourceZ] = source.getPos()
+        [listenerX, listenerY, listenerZ] = self.listener.getPos()
+        
+        ydiff = sourceY - listenerY
+        xdiff = sourceX - listenerX
+        
+        # calculate azimuth
+        if(xdiff == 0):
+            if(sourceY >= listenerY):
+                azimuth = 0
+            else:
+                azimuth = 180
+        elif(ydiff == 0):
+            if(sourceX >= listenerX):
+                azimuth = 90
+            else:
+                azimuth = -90
+        else:
+            if((listenerY > sourceY)):
+                azimuth = math.degrees(math.atan(ydiff / xdiff) - math.pi)
+            else:
+                azimuth = math.degrees(math.atan(ydiff / xdiff))
+        if(azimuth > 180):
+            azimuth = -1* (360-abs(azimuth))
+        if(azimuth < -180):
+            azimuth = 360-abs(azimuth)
+
+        #TODO CALCULATE ELEVATION
+        #zdiff = sourceZ - listenerZ
+        #xdiff = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
+        #elevation = math.atan(numerator / xdiff)
+
+        elevation = 0
+
+        return [azimuth, elevation]
+
 
 def on_press(key):
     global global_listener
@@ -280,8 +285,6 @@ def on_press(key):
             global_listener.update(0, 0, -1, 0, 0)
         else:
             print("unknown input")
-
-    
 
 
 if __name__ == "__main__":

@@ -14,70 +14,6 @@ Python SOFA API: https://python-sofa.readthedocs.io/en/latest/index.html
 SOFA specifications: https://www.sofaconventions.org/mediawiki/index.php/SOFA_specifications
 """
 
-"""
-# x = forward, y = right, z = up
-# pitch = tilting on x axis
-# yaw = tilting on z axis
-# roll = tilting on y axis
-
-# pitch = 0
-# yaw = 0
-# roll = 0
-# x = 0
-# y = 0
-# z = 0
-
-# keyboard listeners
-def on_up():
-    global pitch
-    pitch = pitch + 10
-    if(pitch == 190):
-        pitch = -170
-def on_down():
-    global pitch
-    pitch = pitch - 10
-    if(pitch == -190):
-        pitch = 170
-def on_right():
-    global yaw
-    yaw = yaw + 10
-    if(yaw == 190):
-        yaw = -170
-def on_left():
-    global yaw
-    yaw = yaw - 10
-    if(yaw == -190):
-        yaw = 170 
-def on_period():
-    global roll
-    roll = roll + 10
-    if(roll == 190):
-        roll = -170
-def on_comma():
-    global roll
-    roll = roll - 10
-    if(roll == -190):
-        roll = 170
-def on_w():
-    global x
-    x = x + 10
-def on_s():
-    global x
-    x = x - 10
-def on_d():
-    global y
-    y = y + 10
-def on_a():
-    global y
-    y = y - 10
-def on_space():
-    global z
-    z = z + 10
-def on_shift():
-    global z
-    z = z - 10
-"""
-
 def find_measurement(azimuth, elevation, spherical_positions):
     best_fit = 0
     best_error = abs(azimuth - spherical_positions[0][0]) + abs(elevation - spherical_positions[0][1])
@@ -176,41 +112,4 @@ if __name__ == '__main__':
     # write to a wav file
     filename = "test_audio_files/piano_test_azi" + str(azimuth) + "_elev" + str(elevation) + ".wav"
     scipy.io.wavfile.write(filename, int(segment.frame_rate), norm)
-    
-    # plot Data.IR at M=5 for E=0
-    # legend = []
-    # t = np.arange(0,HRTF.Dimensions.N)*HRTF.Data.SamplingRate.get_values(indices={"M":measurement})
-    # plt.figure(figsize=(15, 5))
-    # for receiver in np.arange(HRTF.Dimensions.R):
-    #     plt.plot(t, HRTF.Data.IR.get_values(indices={"M":measurement, "R":receiver, "E":emitter}))
-    #     legend.append('Receiver {0}'.format(receiver))
-    # plt.title('HRIR at M={0} for emitter {1}'.format(measurement, emitter))
-    # plt.legend(legend)
-    # plt.xlabel('$t$ in s')
-    # plt.ylabel(r'$h(t)$')
-    # plt.grid()
-    # plt.show()
 
-    # HRTF.close()
-
-    # global pitch, roll, yaw, x, y, z
-    # audiofile = load_file("piano2.wav")
-    # keyboard.add_hotkey('up', on_up)
-    # keyboard.add_hotkey('down', on_down)
-    # keyboard.add_hotkey('right', on_right)
-    # keyboard.add_hotkey('left', on_left)
-    # keyboard.add_hotkey('.', on_period)
-    # keyboard.add_hotkey(',', on_comma)
-    # keyboard.add_hotkey('w', on_w)
-    # keyboard.add_hotkey('a', on_a)
-    # keyboard.add_hotkey('s', on_s)
-    # keyboard.add_hotkey('d', on_d)
-    # keyboard.add_hotkey('space', on_space)
-    # keyboard.add_hotkey('shift', on_shift)
-
-    # HRTF_path = "mit_kemar_normal_pinna.sofa"
-    # HRTF = sofa.Database.open(HRTF_path)
-    # HRTF.Metadata.dump()
-
-    # while True:
-    #     print("PITCH - ",pitch," YAW - ", yaw, " ROLL - ", roll, "X - ",x," Y - ", y, " Z - ", z, )
