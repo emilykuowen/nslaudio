@@ -139,9 +139,11 @@ class Scene:
         """ Initialize """
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
-        self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
+        self.sources = [Source(0, 0, 0, "audio_sources/sin_440.wav"), 
+                        Source(5, 0, 0, "audio_sources/sweep.wav"),
+                        Source(-3, -3, 0, "audio_sources/sin_600Hz.wav")]
         #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
-        self.stream = AudioStream("piano.wav")
+        self.stream = AudioStream("audio_sources/piano.wav")
         self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
         self.timeIndex = 0
         self.fs = 44100
@@ -293,7 +295,7 @@ if __name__ == "__main__":
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
-    currentScene = Scene("sin_440.wav", "mit_kemar_normal_pinna.sofa", global_listener)
+    currentScene = Scene("audio_sources/sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
 
 

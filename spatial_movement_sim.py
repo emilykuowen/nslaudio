@@ -209,16 +209,16 @@ if __name__ == '__main__':
     """
 
     # Example 1: generating audio file for square movement of sine tone
-    HRTF_path = "mit_kemar_normal_pinna.sofa"
-    source_file = "sin_440.wav"
-    cvs_file = "sin_source_square.csv"
-    output_filename = "test_audio_files/sin_440_square_movement.wav"
+    HRTF_path = "hrtf/mit_kemar_normal_pinna.sofa"
+    source_file = "audio_sources/sin_440.wav"
+    cvs_file = "csv/sin_source_square.csv"
+    output_filename = "audio_output/sin_440_square_movement.wav"
     output_flag = True
     generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
 
     # Example 2: generating audio file for circular movements of sine tone and piano tune
-    source_array = ["sin_440.wav", "piano.wav"]
-    cvs_array = ["sin_source_circular.csv", "piano_source_circular.csv"]
-    output_filename = "test_audio_files/sin_440_and_piano_circular_movement.wav"
+    source_array = ["audio_sources/sin_440.wav", "audio_sources/piano.wav"]
+    cvs_array = ["csv/sin_source_circular.csv", "csv/piano_source_circular.csv"]
+    output_filename = "audio_output/sin_440_and_piano_circular_movement.wav"
     generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, output_filename)
 
