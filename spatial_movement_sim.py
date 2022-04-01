@@ -8,6 +8,7 @@ from pydub import AudioSegment
 import io
 import scipy.io.wavfile
 import csv
+import math
 
 """
 Python SOFA API: https://python-sofa.readthedocs.io/en/latest/index.html
@@ -30,6 +31,7 @@ def find_measurement(azimuth, elevation, spherical_positions):
             best_error = new_error
     return best_fit
 
+
 def plot_coordinates(coords, title):
     x0 = coords
     n0 = coords
@@ -42,10 +44,153 @@ def plot_coordinates(coords, title):
     plt.title(title)
     return q
 
+
 def normalize(num_array):
     norm = np.linalg.norm(num_array)
     normalized_array = num_array / norm
     return normalized_array
+
+
+def get_angle_and_attenuation(source_file):
+    listenerX = 0
+    listenerY = 0
+    listenerZ = 0
+    azimuth_list = []
+    elevation_list = []
+    attenuation_list = []
+
+    with open(source_file, newline='') as csvfile:
+        # get number of columns
+        csvreader = csv.reader(csvfile, delimiter=',')
+        for row in csvreader:
+            sourceX = float(row[0])
+            sourceY = float(row[1])
+            sourceZ = float(row[2])
+            
+            diffX = sourceX - listenerX
+            diffY = sourceY - listenerY
+            diffZ = sourceZ - listenerZ
+    
+            # calculate azimuth
+            if(diffX == 0):
+                if(sourceY >= listenerY):
+                    azimuth = 0
+                else:
+                    azimuth = 180
+            elif(diffY == 0):
+                if(sourceX >= listenerX):
+                    azimuth = 90
+                else:
+                    azimuth = 270
+            else:
+                if(listenerY > sourceY):
+                    azimuth = math.degrees(math.atan(diffY / diffX) - math.pi)
+                else:
+                    azimuth = math.degrees(math.atan(diffY / diffX))
+
+            if (azimuth < 0):
+                azimuth = 360 + azimuth
+
+            #TODO calculate elevation
+            # diffX = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
+            # elevation = math.atan(numerator / diffX)
+            elevation = 0
+
+            distance = math.sqrt(diffX**2 + diffY**2 + diffZ**2)
+            if distance == 0:
+                attenuation = 1.0
+            else:
+                attenuation = 1.0 / (distance**2)
+            
+            azimuth_list.append(azimuth)
+            elevation_list.append(elevation)
+            attenuation_list.append(attenuation)
+
+    return np.column_stack((azimuth_list, elevation_list,attenuation_list))
+
+
+def generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename="", output_flag=False):
+    HRTF = sofa.Database.open(HRTF_path)
+    HRTF.Metadata.dump()
+    spherical_source_positions = HRTF.Source.Position.get_values(system="spherical")
+    emitter = 0
+
+    # read audio data from source file
+    segment = AudioSegment.from_file(source_file)
+    segment_channels = segment.split_to_mono()
+    audio_samples = [s.get_array_of_samples() for s in segment_channels]
+    audio_np_array = np.array(audio_samples).T
+    audio_len = audio_np_array.shape[0]
+
+    # calculate azimuth angle, elevation angle, and attenuation constant for each position
+    audio_info = get_angle_and_attenuation(cvs_file)
+    print("processing ", source_file)
+    print(audio_info)
+    position_num = len(audio_info)
+    chunk_len = audio_len // position_num
+
+    convolved_channel_left = np.zeros(1)
+    convolved_channel_right = np.zeros(1)
+
+    for i in range(position_num):
+        azimuth = audio_info[i][0]
+        elevation = audio_info[i][1]
+        attenuation = audio_info[i][2]
+        measurement = find_measurement(azimuth, elevation, spherical_source_positions)
+        hrtf_left = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
+        hrtf_right = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
+
+        start_index = i*chunk_len
+        end_index = (i+1)*chunk_len-1
+        # TODO: make this compatible with both stereo and mono files
+        audio_chunk = audio_np_array[start_index:end_index, 0]
+
+        convolved_left = np.array(signal.convolve(audio_chunk, hrtf_left, mode='full'))
+        convolved_right = np.array(signal.convolve(audio_chunk, hrtf_right, mode='full'))
+
+        # attenuate the signal by the inverse square law
+        convolved_left = np.trim_zeros(convolved_left) * attenuation
+        convolved_right = np.trim_zeros(convolved_right) * attenuation
+
+        convolved_channel_left = np.concatenate((convolved_channel_left, convolved_left))
+        convolved_channel_right = np.concatenate((convolved_channel_right, convolved_right))
+
+    convolved_stereo = np.array([convolved_channel_left, convolved_channel_right]).T
+   
+    if output_flag == True:
+        convolved_normalized = np.array(normalize(convolved_stereo))
+        num_bit = 16
+        bit_depth = 2 ** (num_bit-1)
+        convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * bit_depth-1)
+        scipy.io.wavfile.write(output_filename, int(segment.frame_rate), convolved_final)
+
+    return convolved_stereo
+
+
+def generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, output_filename):
+    convolved_sum = generate_audio_for_single_source(HRTF_path, source_array[0], cvs_array[0])
+    num_sources = len(source_array)
+
+    for i in range(1, num_sources):
+        convolved_new = generate_audio_for_single_source(HRTF_path, source_array[i], cvs_array[i])
+
+        old_source_len = len(convolved_sum)
+        new_source_len = len(convolved_new)
+        pad_len = abs(old_source_len - new_source_len)
+    
+        if old_source_len < new_source_len:
+            convolved_padded = np.pad(convolved_sum, ((0,pad_len),(0,0)), 'constant')
+            convolved_sum = np.add(convolved_padded, convolved_new)
+        else:
+            convolved_padded = np.pad(convolved_new, ((0,pad_len),(0,0)), 'constant')
+            convolved_sum = np.add(convolved_padded, convolved_sum)
+    
+    convolved_normalized = np.array(normalize(convolved_sum))
+    num_bit = 16
+    bit_depth = 2 ** (num_bit-1)
+    convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * bit_depth-1)
+    scipy.io.wavfile.write(output_filename, 44100, convolved_final)
+
 
 if __name__ == '__main__':
     """
@@ -63,150 +208,17 @@ if __name__ == '__main__':
     sampled.
     """
 
+    # Example 1: generating audio file for square movement of sine tone
     HRTF_path = "mit_kemar_normal_pinna.sofa"
-    HRTF = sofa.Database.open(HRTF_path)
-    HRTF.Metadata.dump()
+    source_file = "sin_440.wav"
+    cvs_file = "sin_source_square.csv"
+    output_filename = "test_audio_files/sin_440_square_movement.wav"
+    output_flag = True
+    generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
 
-    # plot source positions
-    # cartesian_source_positions = HRTF.Source.Position.get_values(system="cartesian")
-    # with open('cartesian_source_positions.csv', 'w', newline='') as file:
-    #     mywriter = csv.writer(file, delimiter=',')
-    #     mywriter.writerows(cartesian_source_positions)
-    
-    spherical_source_positions = HRTF.Source.Position.get_values(system="spherical")
-    # with open('spherical_source_positions.csv', 'w', newline='') as file:
-    #     mywriter = csv.writer(file, delimiter=',')
-    #     mywriter.writerows(spherical_source_positions)
-    
-    # hrtf_sampling_rate = HRTF.Data.SamplingRate.get_values(indices={"M": measurement})
-    # print("hrtf sampling rate =", hrtf_sampling_rate)
-    # plot_coordinates(source_positions, 'Source positions')
-
-    emitter = 0
-
-    # sin_440.wav -> mono
-    # piano.wav / .mp3 -> stereo
-    # don't_start_now.m4a -> stereo
-
-    filename = 'piano.wav'
-    segment = AudioSegment.from_file(filename)
-    channel_sounds = segment.split_to_mono()
-    
-    """
-    AudioSegment(…).get_array_of_samples()
-    Returns the raw audio data as an array of (numeric) samples.
-    Note: if the audio has multiple channels, the samples for each channel will be serialized
-    – for example, stereo audio would look like [sample_1_L, sample_1_R, sample_2_L, sample_2_R, …]
-    """
-    samples = [s.get_array_of_samples() for s in channel_sounds]
-    audio_np_array = np.array(samples).T
-    print('audio shape = ', audio_np_array.shape)
-
-    hrtf_len = len(HRTF.Data.IR.get_values(indices={"M":0, "R":0, "E":emitter}))
-    print('hrtf_len = ', hrtf_len)
-
-    azimuth_resolution = 5
-    num_angles = 360 // azimuth_resolution
-    
-    audio_len = audio_np_array.shape[0]
-    chunk_len = audio_len // num_angles
-    print('chunk_len = ', chunk_len)
-
-    convolved_channel1 = np.zeros(1)
-    convolved_channel2 = np.zeros(1)
-    convolved_channel3 = np.zeros(1)
-    convolved_channel4 = np.zeros(1)
-
-    for i in range(num_angles):
-        azimuth = i * (360 // num_angles)
-        elevation = 0
-        measurement = find_measurement(azimuth, elevation, spherical_source_positions)
-        hrtf1 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
-        hrtf2 = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
-
-        start_index = i*chunk_len
-        end_index = (i+1)*chunk_len-1
-        # print('start_index = ', start_index)
-        # print('end_index = ', end_index)
-        
-        # win = signal.windows.hann(chunk_len)
-        audio_chunk = audio_np_array[start_index:end_index, 0]
-        # filtered_chunk = signal.convolve(audio_chunk, win, mode='same') / sum(win)
-
-        convolved1 = np.array(signal.convolve(audio_chunk, hrtf1, mode='full'))
-        convolved2 = np.array(signal.convolve(audio_chunk, hrtf2, mode='full'))
-        # print('convolved1_len = ', len(convolved1))
-        # print('convolved2_len = ', len(convolved2))
-        convolved1 = np.trim_zeros(convolved1)
-        convolved2 = np.trim_zeros(convolved2)
-        # print('trimmed convolved1_len = ', len(convolved1))
-        # print('trimmed convolved2_len = ', len(convolved2))
-        convolved_channel1 = np.concatenate((convolved_channel1, convolved1))
-        convolved_channel2 = np.concatenate((convolved_channel2, convolved2))
-    
-    filename = 'sin_440.wav'
-    segment = AudioSegment.from_file(filename)
-    channel_sounds = segment.split_to_mono()
-    samples = [s.get_array_of_samples() for s in channel_sounds]
-    audio_np_array = np.array(samples).T
-    print('audio shape = ', audio_np_array.shape)
-
-    azimuth_resolution = 5
-    num_angles = 360 // azimuth_resolution
-    
-    audio_len = audio_np_array.shape[0]
-    chunk_len = audio_len // num_angles
-    
-    for i in range(num_angles):
-        azimuth2 = 360 - i * (360 // num_angles)
-        measurement2 = find_measurement(azimuth2, elevation, spherical_source_positions)
-        hrtf3 = HRTF.Data.IR.get_values(indices={"M":measurement2, "R":0, "E":emitter})
-        hrtf4 = HRTF.Data.IR.get_values(indices={"M":measurement2, "R":1, "E":emitter})
-
-        start_index = i*chunk_len
-        end_index = (i+1)*chunk_len-1
-        audio_chunk = audio_np_array[start_index:end_index, 0]
-
-        convolved3 = np.array(signal.convolve(audio_chunk, hrtf3, mode='full'))
-        convolved4 = np.array(signal.convolve(audio_chunk, hrtf4, mode='full'))
-        convolved3 = np.trim_zeros(convolved3)
-        convolved4 = np.trim_zeros(convolved4)
-
-        convolved_channel3 = np.concatenate((convolved_channel3, convolved3))
-        convolved_channel4 = np.concatenate((convolved_channel4, convolved4))
-
-    # write to a wav file
-    # left_len = len(convolved_channel1)
-    # right_len = len(convolved_channel2)
-    # pad_len = abs(left_len - right_len)
-    # print(pad_len)
-
-    # if left_len < right_len: 
-    #     convolved_channel1 = np.pad(convolved_channel1, (0, pad_len), 'constant')
-    # else: 
-    #     convolved_channel2 = np.pad(convolved_channel2, (0, pad_len), 'constant')
-    
-    # print("left convolved len = ", len(convolved_channel1))
-    # print("right convolved len = ", len(convolved_channel2))
-
-    source_len1 = len(convolved_channel1)
-    source_len2 = len(convolved_channel3)
-    pad_len = abs(source_len1 - source_len2)
-    
-    if source_len1 < source_len2:
-        convolved_channel1 = np.pad(convolved_channel1, (0, pad_len), 'constant')
-        convolved_channel2 = np.pad(convolved_channel2, (0, pad_len), 'constant')
-    else:
-        convolved_channel3 = np.pad(convolved_channel3, (0, pad_len), 'constant')
-        convolved_channel4 = np.pad(convolved_channel4, (0, pad_len), 'constant')
-
-    convolved_sum1 = np.add(convolved_channel1, convolved_channel3)
-    convolved_sum2 = np.add(convolved_channel2, convolved_channel4)
-    comb = np.array([convolved_sum1, convolved_sum2]).T
-    norm = np.array(normalize(comb))
-    num_bit = 16
-    bit_depth = 2 ** (num_bit-1)
-    comb2 = np.int16(norm/np.max(np.abs(norm)) * bit_depth-1)
-    filename = "test_audio_files/" + filename.partition('.')[0] + "_surround_2source_" + str(bit_depth-1) + "_trim.wav"
-    scipy.io.wavfile.write(filename, int(segment.frame_rate), comb2)
+    # Example 2: generating audio file for circular movements of sine tone and piano tune
+    source_array = ["sin_440.wav", "piano.wav"]
+    cvs_array = ["sin_source_circular.csv", "piano_source_circular.csv"]
+    output_filename = "test_audio_files/sin_440_and_piano_circular_movement.wav"
+    generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, output_filename)
 
