@@ -106,12 +106,16 @@ class Listener:
         self.yPos = self.yPos + y
         self.zPos = self.zPos + z
         self.azimuthTilt = self.azimuthTilt + az
-        if(self.azimuthTilt <= 0):
+        if(self.azimuthTilt < 0):
             self.azimuthTilt = 360 + self.azimuthTilt
         if(self.azimuthTilt >=360):
             self.azimuthTilt = self.azimuthTilt - 360
 
         self.elevationTilt = self.elevationTilt + el
+        if(self.elevationTilt < -90):
+            self.elevationTilt = -180 - self.elevationTilt
+        if(self.elevationTilt >90):
+            self.elevationTilt = 180 - self.elevationTilt
 
 class Scene:
     def __init__(self, sourceFilename, HRTFFilename, global_listener):
@@ -122,7 +126,7 @@ class Scene:
         #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
         self.sources = [Source(0, 0, -5, "sin_300.wav")]
         #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
-        self.stream = AudioStream("piano.wav", 2)
+        self.stream = AudioStream("sin_300.wav", 2)
         self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
         self.timeIndex = 0
         self.fs = 44100
@@ -133,7 +137,9 @@ class Scene:
         #while data != b'':
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
+            [az, el] = self.listener.getAngles()
             print("POSITION x=", x, " y=", y, " z=", z)
+            print("ANGLES az = ", az, " el = ", el)
             convolved = self.generateChunk()
             self.stream.stream.write(convolved)
             
@@ -216,6 +222,13 @@ class Scene:
                 elevation = 90
         else:
             elevation = math.atan(numerator / denominator)
+        
+        if(elevation > 90):
+            elevation = 180 - elevation
+        if(elevation <-90):
+            elevation = -180 - elevation
+
+        elevation = elevation - listenerEl
 
         distance = math.sqrt(denominator**2 + numerator**2 + 0**2)
         if distance == 0:
@@ -290,7 +303,7 @@ if __name__ == "__main__":
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
-    currentScene = Scene("sin_440.wav", "mit_kemar_normal_pinna.sofa", global_listener)
+    currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
 
 
