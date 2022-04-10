@@ -1,4 +1,3 @@
-import keyboard
 import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
@@ -12,7 +11,6 @@ import wave
 import time
 import math
 from pynput import keyboard
-import pandas as pd
 
 class AudioStream:
     def __init__(self, file, numchannels=1):
@@ -49,6 +47,7 @@ class AudioStream:
         """ Close stream """
         self.stream.close()
         self.p.terminate()
+
 
 class HRTFFile:
     emitter = 0
@@ -108,14 +107,15 @@ class Listener:
         self.azimuthTilt = self.azimuthTilt + az
         if(self.azimuthTilt < 0):
             self.azimuthTilt = 360 + self.azimuthTilt
-        if(self.azimuthTilt >=360):
+        if(self.azimuthTilt >= 360):
             self.azimuthTilt = self.azimuthTilt - 360
 
         self.elevationTilt = self.elevationTilt + el
         if(self.elevationTilt < -90):
             self.elevationTilt = -180 - self.elevationTilt
-        if(self.elevationTilt >90):
+        if(self.elevationTilt > 90):
             self.elevationTilt = 180 - self.elevationTilt
+
 
 class Scene:
     def __init__(self, sourceFilename, HRTFFilename, global_listener):
@@ -123,26 +123,23 @@ class Scene:
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
         #self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
-        #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
-        self.sources = [Source(0, 0, -5, "sin_300.wav")]
-        #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
+        self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
+        # self.sources = [Source(0, 0, -5, "sin_300.wav")]
         self.stream = AudioStream("sin_300.wav", 2)
         self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
-        
 
     def begin(self):
         #while data != b'':
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
-            print("POSITION x=", x, " y=", y, " z=", z)
+            print("POSITION x = ", x, " y = ", y, " z = ", z)
             print("ANGLES az = ", az, " el = ", el)
             convolved = self.generateChunk()
             self.stream.stream.write(convolved)
-            
             #time.sleep(2)
 
     def quit(self):
@@ -164,7 +161,7 @@ class Scene:
             
             convolved = np.array([convolved1, convolved2]).T
 
-            if(flag==0):
+            if(flag == 0):
                 summed = convolved
                 flag = 1
             else:
@@ -185,10 +182,10 @@ class Scene:
         [listenerX, listenerY, listenerZ] = self.listener.getPos()
         [listenerAz, listenerEl] = self.listener.getAngles()
         
+        # calculate azimuth
         numerator = sourceY - listenerY
         denominator = sourceX - listenerX
         
-        #CALCULATE AZIMUTH
         if(denominator == 0):
             if(sourceY >= listenerY):
                 azimuth = 0
@@ -210,13 +207,13 @@ class Scene:
 
         azimuth = azimuth - listenerAz
 
-        #Calculate Elevation
+        # calculate elevation
         numerator = sourceZ - listenerZ
         denominator = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
         if(numerator == 0):
             elevation = 0
         elif(denominator == 0):
-            if(sourceZ<listenerZ):
+            if(sourceZ < listenerZ):
                 elevation = -90
             else:
                 elevation = 90
@@ -225,7 +222,7 @@ class Scene:
         
         if(elevation > 90):
             elevation = 180 - elevation
-        if(elevation <-90):
+        if(elevation < -90):
             elevation = -180 - elevation
 
         elevation = elevation - listenerEl
@@ -237,6 +234,7 @@ class Scene:
             attenuation = 1.0 / (distance**2)
 
         return [azimuth, elevation, attenuation]
+
 
 class Source:
     def __init__(self, x, y, z, filename):
@@ -265,9 +263,10 @@ class Source:
     def getNextChunk(self, chunkSize):
         return self.stream.wf.readframes(chunkSize)
 
+
 def on_press(key):
     global global_listener
-    try:    
+    try:
         if(key.char == 'w'):
             global_listener.update(0, 0, 0, 0, 10)
         if(key.char == 'a'):
@@ -294,8 +293,6 @@ def on_press(key):
         else:
             print("unknown input")
 
-    
-#Azimuth - 0 to 360 counterclockwise, 0 in front
 
 if __name__ == "__main__":
     global_listener = Listener()
