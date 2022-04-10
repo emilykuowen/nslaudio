@@ -1,16 +1,16 @@
-import keyboard
-import numpy as np
-from scipy import signal
-import matplotlib.pyplot as plt
-import sofa
-from pydub import AudioSegment
-from scipy.io.wavfile import write
 import csv
 import wave
 import pyaudio
 import wave
 import time
 import math
+import keyboard
+import sofa
+import numpy as np
+from scipy import signal
+import matplotlib.pyplot as plt
+from pydub import AudioSegment
+from scipy.io.wavfile import write
 from pynput import keyboard
 import pandas as pd
 
@@ -19,12 +19,6 @@ class AudioStream:
         """ Initialize """
         self.wf = wave.open(file, 'rb')
         self.p = pyaudio.PyAudio()
-
-        # http://people.csail.mit.edu/hubert/pyaudio/docs/
-        print(self.wf.getsampwidth()) # 2 --> 16-bit int
-        print(self.p.get_format_from_width(self.wf.getsampwidth())) # 8 --> 16-bit int
-        print(self.wf.getnchannels()) # 1
-        print(self.wf.getframerate()) # 44100
 
         self.stream = self.p.open(
             format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
@@ -40,10 +34,6 @@ class AudioStream:
         while data != b'':
             self.stream.write(data)
             data = self.wf.readframes(1024)
-
-    def queueChunk(self, chunk):
-        """ Write audio to stream """
-        self.stream.write(chunk)
 
     def close(self):
         """ Close stream """
@@ -82,7 +72,6 @@ class HRTFFile:
         hrtf2 = self.HRTF.Data.IR.get_values(indices={"M":self.measurement, "R":1, "E":self.emitter})
         return [hrtf1, hrtf2]
 
-
 class Listener:
     def __init__(self):
         """ Initialilze """
@@ -105,6 +94,7 @@ class Listener:
         self.xPos = self.xPos + x
         self.yPos = self.yPos + y
         self.zPos = self.zPos + z
+
         self.azimuthTilt = self.azimuthTilt + az
         if(self.azimuthTilt < 0):
             self.azimuthTilt = 360 + self.azimuthTilt
@@ -125,16 +115,14 @@ class Scene:
         #self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
         #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
         self.sources = [Source(0, 0, -5, "sin_300.wav")]
-        #TODO change self.stream to initialize NOT using a normal file, but instead set parameters to match what we want the output to be as
         self.stream = AudioStream("sin_300.wav", 2)
-        self.chunkSize = 4096 # the larger the chunk size, the less noise / pauses
+        self.chunkSize = 4096
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
-        
 
     def begin(self):
-        #while data != b'':
+        """ Continuously generate and queue next chunk """"
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
@@ -142,10 +130,10 @@ class Scene:
             print("ANGLES az = ", az, " el = ", el)
             convolved = self.generateChunk()
             self.stream.stream.write(convolved)
-            
             #time.sleep(2)
 
     def quit(self):
+        """ Exit the Scene """
         self.exit = True
 
     def generateChunk(self):
@@ -158,10 +146,9 @@ class Scene:
             [azimuth, elevation, attenuation] = self.getAngles(currSource)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
             
-            #TODO attenuation/distance scaling is not working, but data IS being scaled- is it a normalization issue?
+            #TODO attenuation/distance scaling doesn't work with one source
             convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full')) * attenuation
             convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full')) * attenuation
-            
             convolved = np.array([convolved1, convolved2]).T
 
             if(flag==0):
@@ -188,7 +175,7 @@ class Scene:
         numerator = sourceY - listenerY
         denominator = sourceX - listenerX
         
-        #CALCULATE AZIMUTH
+        #Calculate Azimuth
         if(denominator == 0):
             if(sourceY >= listenerY):
                 azimuth = 0
@@ -204,10 +191,8 @@ class Scene:
                 azimuth = math.degrees(math.atan(numerator / denominator) - math.pi)
             else:
                 azimuth = math.degrees(math.atan(numerator / denominator))
-
         if (azimuth < 0):
             azimuth = 360 + azimuth
-
         azimuth = azimuth - listenerAz
 
         #Calculate Elevation
@@ -222,12 +207,10 @@ class Scene:
                 elevation = 90
         else:
             elevation = math.atan(numerator / denominator)
-        
         if(elevation > 90):
             elevation = 180 - elevation
         if(elevation <-90):
             elevation = -180 - elevation
-
         elevation = elevation - listenerEl
 
         distance = math.sqrt(denominator**2 + numerator**2 + 0**2)
@@ -244,14 +227,11 @@ class Source:
         self.xPos = x
         self.yPos = y
         self.zPos = z
-
         self.index = 0
-        
         segment = AudioSegment.from_file(filename)
         channel_sounds = segment.split_to_mono()
         samples = [s.get_array_of_samples() for s in channel_sounds]
         self.audioArray = np.array(samples).T
-
         self.stream = AudioStream(filename)
     
     def getPos(self):
@@ -263,9 +243,11 @@ class Source:
         return self.audioArray
     
     def getNextChunk(self, chunkSize):
+        """ Access next chunk """
         return self.stream.wf.readframes(chunkSize)
 
 def on_press(key):
+    """ Add key listeners to main """
     global global_listener
     try:    
         if(key.char == 'w'):
@@ -294,21 +276,17 @@ def on_press(key):
         else:
             print("unknown input")
 
-    
 #Azimuth - 0 to 360 counterclockwise, 0 in front
-
+#Elevation - -90 to 0 to 90
 if __name__ == "__main__":
     global_listener = Listener()
-
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
     currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
 
-
 ## TODO Scene(), Source() Figure out format for Source object files.
     ## Each source object should have some kind of txt or csv file containing info on its audio file and position data
     ## The sourceFilename string should be used to open a file or folder where we can parse that info, create a set of Source() objects, and place them in the Scene() self.sources() array
-## TODO Scene() add gain adjustment and normalization to change volume with distance
 
