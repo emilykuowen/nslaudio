@@ -206,14 +206,15 @@ class Scene:
             else:
                 elevation = 90
         else:
-            elevation = math.atan(numerator / denominator)
+            elevation = math.degrees(math.atan(numerator / denominator))
+            
         if(elevation > 90):
             elevation = 180 - elevation
         if(elevation <-90):
             elevation = -180 - elevation
         elevation = elevation - listenerEl
 
-        distance = math.sqrt(denominator**2 + numerator**2 + 0**2)
+        distance = math.sqrt((sourceX - listenerX)**2 + (sourceY - listenerY)**2 + (sourceZ - listenerZ)**2)
         if distance == 0:
             attenuation = 1.0
         else:
