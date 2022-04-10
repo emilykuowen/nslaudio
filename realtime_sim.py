@@ -111,8 +111,8 @@ class Scene:
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
         #self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
-        #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
-        self.sources = [Source(0, 0, -5, "sin_300.wav")]
+        self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
+        #self.sources = [Source(0, 0, -5, "sin_300.wav")]
         self.stream = AudioStream("sin_300.wav", 2)
         self.chunkSize = 4096
         self.timeIndex = 0
@@ -120,7 +120,7 @@ class Scene:
         self.exit = False
 
     def begin(self):
-        """ Continuously generate and queue next chunk """"
+        """ Continuously generate and queue next chunk """
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
@@ -170,49 +170,50 @@ class Scene:
         [listenerX, listenerY, listenerZ] = self.listener.getPos()
         [listenerAz, listenerEl] = self.listener.getAngles()
         
+        diffX = sourceX - listenerX
+        diffY = sourceY - listenerY
+        diffZ = sourceZ - listenerZ
+
         # calculate azimuth
-        numerator = sourceY - listenerY
-        denominator = sourceX - listenerX
-        
-        if(denominator == 0):
-            if(sourceY >= listenerY):
+        if diffX == 0:
+            if sourceY >= listenerY:
                 azimuth = 0
             else:
                 azimuth = 180
-        elif(numerator == 0):
-            if(sourceX >= listenerX):
+        elif diffY == 0:
+            if sourceX >= listenerX:
                 azimuth = 90
             else:
                 azimuth = 270
         else:
-            if(listenerY > sourceY):
-                azimuth = math.degrees(math.atan(numerator / denominator) - math.pi)
+            if listenerY > sourceY:
+                azimuth = math.degrees(math.atan(diffY / diffX) - math.pi)
             else:
-                azimuth = math.degrees(math.atan(numerator / denominator))
-        if (azimuth < 0):
+                azimuth = math.degrees(math.atan(diffY / diffX))
+
+        if azimuth < 0:
             azimuth = 360 + azimuth
         azimuth = azimuth - listenerAz
 
         # calculate elevation
-        numerator = sourceZ - listenerZ
-        denominator = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
-        if(numerator == 0):
+        horizontal_distance = math.sqrt(diffX**2 + diffY**2)
+        if diffZ == 0:
             elevation = 0
-        elif(denominator == 0):
-            if(sourceZ < listenerZ):
+        elif horizontal_distance == 0:
+            if sourceZ < listenerZ:
                 elevation = -90
             else:
                 elevation = 90
         else:
-            elevation = math.degrees(math.atan(numerator / denominator))
-            
+            elevation = math.degrees(math.atan(diffZ / horizontal_distance))
+
         if(elevation > 90):
             elevation = 180 - elevation
         if(elevation < -90):
             elevation = -180 - elevation
         elevation = elevation - listenerEl
 
-        distance = math.sqrt((sourceX - listenerX)**2 + (sourceY - listenerY)**2 + (sourceZ - listenerZ)**2)
+        distance = math.sqrt(diffX**2 + diffY**2 + diffZ**2)
         if distance == 0:
             attenuation = 1.0
         else:
