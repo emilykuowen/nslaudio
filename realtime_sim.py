@@ -1,5 +1,8 @@
+import csv
 import wave
 import pyaudio
+import wave
+import time
 import math
 import sofa
 import numpy as np
@@ -8,40 +11,24 @@ import matplotlib.pyplot as plt
 from pydub import AudioSegment
 from scipy.io.wavfile import write
 from pynput import keyboard
+import pandas as pd
 
 
 #Instead of using blocking read/write in pyaudio, use a callback function in place to generate audio when needed
 # https://stackoverflow.com/questions/62618934/pyaudio-how-to-access-stream-read-data-in-callback-non-blocking-mode
 
 class AudioStream:
-
-    def __init__(self, file, numchannels, output_flag = 0):
+    def __init__(self, file, numchannels=1):
         """ Initialize """
         self.wf = wave.open(file, 'rb')
         self.p = pyaudio.PyAudio()
 
-        if(output_flag == 0):
-            self.stream = self.p.open(
-                format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
-                channels = numchannels, 
-                rate = self.wf.getframerate(), # 44100 Hz
-                output = True,
-            )
-        else:
-            self.stream = self.p.open(
-                format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
-                channels = numchannels, 
-                rate = self.wf.getframerate(), # 44100 Hz
-                output = True,
-                stream_callback=callback
-            )
-        
-        self.stream.start_stream()
-        while self.stream.is_active():
-            time.sleep(5)
-            self.stream.stop_stream()
-        
-        self.stream.close()
+        self.stream = self.p.open(
+            format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
+            channels = numchannels, 
+            rate = self.wf.getframerate(), # 44100 Hz
+            output = True
+        )
 
     def play(self):
         """ Play entire file """
@@ -55,7 +42,6 @@ class AudioStream:
         """ Close stream """
         self.stream.close()
         self.p.terminate()
-
 
 class HRTFFile:
     emitter = 0
@@ -115,15 +101,14 @@ class Listener:
         self.azimuthTilt = self.azimuthTilt + az
         if(self.azimuthTilt < 0):
             self.azimuthTilt = 360 + self.azimuthTilt
-        if(self.azimuthTilt >= 360):
+        if(self.azimuthTilt >=360):
             self.azimuthTilt = self.azimuthTilt - 360
 
         self.elevationTilt = self.elevationTilt + el
         if(self.elevationTilt < -90):
             self.elevationTilt = -180 - self.elevationTilt
-        if(self.elevationTilt > 90):
+        if(self.elevationTilt >90):
             self.elevationTilt = 180 - self.elevationTilt
-
 
 class Scene:
     def __init__(self, sourceFilename, HRTFFilename, global_listener):
@@ -131,15 +116,9 @@ class Scene:
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
         #self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
-<<<<<<< HEAD
         #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
-        self.sources = [Source(0, 0, -5, "sweep.wav")]
-        self.stream = AudioStream("sin_300.wav", 2, 1)
-=======
-        self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
-        #self.sources = [Source(0, 0, -5, "sin_300.wav")]
+        self.sources = [Source(0, 0, -5, "audio_sources/piano.wav")]
         self.stream = AudioStream("sin_300.wav", 2)
->>>>>>> a1561b09e603cbc384e87065b10f622408356cf3
         self.chunkSize = 4096
         self.timeIndex = 0
         self.fs = 44100
@@ -150,16 +129,13 @@ class Scene:
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
-            print("POSITION x = ", x, " y = ", y, " z = ", z)
-            print("ANGLES az = ", az, " el = ", el)
-
-            #Callback version
-
-            #Blocking Version
-            """
+            #print("POSITION x=", x, " y=", y, " z=", z)
+            #print("ANGLES az = ", az, " el = ", el)
+            start = time.time()
             convolved = self.generateChunk()
             self.stream.stream.write(convolved)
-            """
+            end = time.time()
+            print(end- start)
             #time.sleep(2)
 
     def quit(self):
@@ -168,7 +144,6 @@ class Scene:
 
     def generateChunk(self):
         """" Generate an audio chunk """
-
         flag = 0
         for currSource in self.sources:
             data = currSource.getNextChunk(self.chunkSize)
@@ -181,12 +156,12 @@ class Scene:
             convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
             convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
 
-            convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(50), mode='same'))
-            convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(50), mode='same'))
+            #convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(5), mode='same'))
+            #convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(5), mode='same'))
             
             convolved = np.array([convolved1, convolved2]).T
 
-            if(flag == 0):
+            if(flag==0):
                 summed = convolved
                 flag = 1
             else:
@@ -198,7 +173,6 @@ class Scene:
         bit_depth = 2 ** (num_bit-1)
         convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
         interleaved = convolved_final.flatten()
-        
 
         return interleaved.tobytes()
 
@@ -208,61 +182,55 @@ class Scene:
         [listenerX, listenerY, listenerZ] = self.listener.getPos()
         [listenerAz, listenerEl] = self.listener.getAngles()
         
-        diffX = sourceX - listenerX
-        diffY = sourceY - listenerY
-        diffZ = sourceZ - listenerZ
-
-        # calculate azimuth
-        if diffX == 0:
-            if sourceY >= listenerY:
+        numerator = sourceY - listenerY
+        denominator = sourceX - listenerX
+        
+        #Calculate Azimuth
+        if(denominator == 0):
+            if(sourceY >= listenerY):
                 azimuth = 0
             else:
                 azimuth = 180
-        elif diffY == 0:
-            if sourceX >= listenerX:
+        elif(numerator == 0):
+            if(sourceX >= listenerX):
                 azimuth = 90
             else:
                 azimuth = 270
         else:
-            if listenerY > sourceY:
-                azimuth = math.degrees(math.atan(diffY / diffX) - math.pi)
+            if(listenerY > sourceY):
+                azimuth = math.degrees(math.atan(numerator / denominator) - math.pi)
             else:
-                azimuth = math.degrees(math.atan(diffY / diffX))
-
-        if azimuth < 0:
+                azimuth = math.degrees(math.atan(numerator / denominator))
+        if (azimuth < 0):
             azimuth = 360 + azimuth
         azimuth = azimuth - listenerAz
 
-        # calculate elevation
-        horizontal_distance = math.sqrt(diffX**2 + diffY**2)
-        if diffZ == 0:
+        #Calculate Elevation
+        numerator = sourceZ - listenerZ
+        denominator = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
+        if(numerator == 0):
             elevation = 0
-        elif horizontal_distance == 0:
-            if sourceZ < listenerZ:
+        elif(denominator == 0):
+            if(sourceZ<listenerZ):
                 elevation = -90
             else:
                 elevation = 90
         else:
-<<<<<<< HEAD
             elevation = math.degrees(math.atan(numerator / denominator))
-=======
-            elevation = math.degrees(math.atan(diffZ / horizontal_distance))
->>>>>>> a1561b09e603cbc384e87065b10f622408356cf3
 
         if(elevation > 90):
             elevation = 180 - elevation
-        if(elevation < -90):
+        if(elevation <-90):
             elevation = -180 - elevation
         elevation = elevation - listenerEl
 
-        distance = math.sqrt(diffX**2 + diffY**2 + diffZ**2)
+        distance = math.sqrt((sourceX - listenerX)**2 + (sourceY - listenerY)**2 + (sourceZ - listenerZ)**2)
         if distance == 0:
             attenuation = 1.0
         else:
             attenuation = 1.0 / (distance**2)
 
         return [azimuth, elevation, attenuation]
-
 
 class Source:
     def __init__(self, x, y, z, filename):
@@ -275,7 +243,7 @@ class Source:
         channel_sounds = segment.split_to_mono()
         samples = [s.get_array_of_samples() for s in channel_sounds]
         self.audioArray = np.array(samples).T
-        self.stream = AudioStream(filename, 1, 0)
+        self.stream = AudioStream(filename)
     
     def getPos(self):
         """ Access position data """
@@ -289,11 +257,10 @@ class Source:
         """ Access next chunk """
         return self.stream.wf.readframes(chunkSize)
 
-
 def on_press(key):
     """ Add key listeners to main """
     global global_listener
-    try:
+    try:    
         if(key.char == 'w'):
             global_listener.update(0, 0, 0, 0, 10)
         if(key.char == 'a'):
@@ -320,58 +287,15 @@ def on_press(key):
         else:
             print("unknown input")
 
-<<<<<<< HEAD
-def callback(in_data, frame_count, time_info, status):
-    flag = 0
-    global currentScene
-    for currSource in currentScene.sources:
-        data = currSource.getNextChunk(currentScene.chunkSize)
-        data_np = np.frombuffer(data, dtype=np.uint16)
-
-        [azimuth, elevation, attenuation] = currentScene.getAngles(currSource)
-        [hrtf1, hrtf2] = currentScene.HRTF.getIR(azimuth, elevation)
-        
-        #TODO attenuation/distance scaling doesn't work with one source
-        convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
-        convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
-
-        convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(50), mode='same'))
-        convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(50), mode='same'))
-        
-        convolved = np.array([convolved1, convolved2]).T
-
-        if(flag==0):
-            summed = convolved
-            flag = 1
-        else:
-            summed = summed + convolved
-    
-    norm = np.linalg.norm(summed)
-    convolved_normalized = summed / norm
-    num_bit = 16
-    bit_depth = 2 ** (num_bit-1)
-    convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
-    interleaved = convolved_final.flatten()
-
-    return [interleaved.tobytes(), pyaudio.paContinue]
-
-
-
 #Azimuth - 0 to 360 counterclockwise, 0 in front
 #Elevation - -90 to 0 to 90
-=======
 if __name__ == "__main__":
     global_listener = Listener()
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
->>>>>>> a1561b09e603cbc384e87065b10f622408356cf3
 
-global_listener = Listener()
-listener = keyboard.Listener(on_press=on_press)
-listener.start()
-
-currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
-currentScene.begin()
+    currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
+    currentScene.begin()
 
 ## TODO Scene(), Source() Figure out format for Source object files.
     ## Each source object should have some kind of txt or csv file containing info on its audio file and position data
