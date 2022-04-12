@@ -19,6 +19,14 @@ yaw = tilting on z axis
 roll = tilting on y axis
 """
 
+"""
+To-Dos:
+- Create demos of interesting shapes
+- Try different HRIR sets with more elevation variations
+- Add in listener movements
+- Make find_measurement() more efficient
+"""
+
 def find_measurement(azimuth, elevation, spherical_positions):
     best_fit = 0
     best_error = abs(azimuth - spherical_positions[0][0]) + abs(elevation - spherical_positions[0][1])
@@ -72,35 +80,52 @@ def get_angle_and_attenuation(source_file):
             diffZ = sourceZ - listenerZ
     
             # calculate azimuth
-            if(diffX == 0):
-                if(sourceY >= listenerY):
+            if diffX == 0:
+                if sourceY >= listenerY:
                     azimuth = 0
                 else:
                     azimuth = 180
-            elif(diffY == 0):
-                if(sourceX >= listenerX):
+            elif diffY == 0:
+                if sourceX >= listenerX:
                     azimuth = 90
                 else:
                     azimuth = 270
             else:
-                if(listenerY > sourceY):
+                if listenerY > sourceY:
                     azimuth = math.degrees(math.atan(diffY / diffX) - math.pi)
                 else:
                     azimuth = math.degrees(math.atan(diffY / diffX))
 
-            if (azimuth < 0):
+            if azimuth < 0:
                 azimuth = 360 + azimuth
+            print("raw azimuth = ", azimuth)
+            
+            # calculate elevation
+            horizontal_distance = math.sqrt(diffX**2 + diffY**2)
+            if diffZ == 0:
+                elevation = 0
+            elif horizontal_distance == 0:
+                if sourceZ < listenerZ:
+                    elevation = -90
+                else:
+                    elevation = 90
+            else:
+                elevation = math.degrees(math.atan(diffZ / horizontal_distance))
+            print("raw atan elevation = ", elevation)
 
-            #TODO calculate elevation
-            # diffX = math.sqrt( ((sourceX - listenerX)**2) + ((sourceY - listenerY)**2) )
-            # elevation = math.atan(numerator / diffX)
-            elevation = 0
+            if(elevation > 90):
+                elevation = 180 - elevation
+            if(elevation < -90):
+                elevation = -180 - elevation
+            print("elevation after flipping = ", elevation)
 
+            # calculate 3D distance
             distance = math.sqrt(diffX**2 + diffY**2 + diffZ**2)
             if distance == 0:
                 attenuation = 1.0
             else:
                 attenuation = 1.0 / (distance**2)
+            print("attenuation = ", attenuation)
             
             azimuth_list.append(azimuth)
             elevation_list.append(elevation)
@@ -137,6 +162,8 @@ def generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_fi
         elevation = audio_info[i][1]
         attenuation = audio_info[i][2]
         measurement = find_measurement(azimuth, elevation, spherical_source_positions)
+        print("found measurement's azimuth = ", spherical_source_positions[measurement][0])
+        print("found measurement's elevation = ", spherical_source_positions[measurement][1])
         hrtf_left = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
         hrtf_right = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
 
@@ -191,34 +218,48 @@ def generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, outp
     convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * bit_depth-1)
     scipy.io.wavfile.write(output_filename, 44100, convolved_final)
 
+"""
+MIT KEMAR HRTF
+
+Coordinate system:
+- Azimuth: 360 degrees (counterclockwise)
+- Elevation range: -40 to +90 degrees
+
+The spherical space around the KEMAR was sampled at elevations from
+-40 degrees (40 degrees below the horizontal plane) to +90 degrees
+(directly overhead).  At each elevation, a full 360 degrees of azimuth
+was sampled in equal sized increments.  The increment sizes were
+chosen to maintain approximately 5 degree great-circle increments.
+The table below shows the number of samples and azimuth increment at
+each elevation (all angles in degrees).  A total of 710 locations were
+sampled.
+"""
 
 if __name__ == '__main__':
-    """
-    Coordinate system:
-    - Azimuth: 360 degrees (counterclockwise)
-    - Elevation range: -40 to +90 degrees
-
-    The spherical space around the KEMAR was sampled at elevations from
-    -40 degrees (40 degrees below the horizontal plane) to +90 degrees
-    (directly overhead).  At each elevation, a full 360 degrees of azimuth
-    was sampled in equal sized increments.  The increment sizes were
-    chosen to maintain approximately 5 degree great-circle increments.
-    The table below shows the number of samples and azimuth increment at
-    each elevation (all angles in degrees).  A total of 710 locations were
-    sampled.
-    """
-
     # Example 1: generating audio file for square movement of sine tone
-    HRTF_path = "hrtf/mit_kemar_normal_pinna.sofa"
+    HRTF_path = "hrtf/dtf_nh2.sofa"
     source_file = "audio_sources/sin_440.wav"
-    cvs_file = "csv/sin_source_square.csv"
-    output_filename = "audio_output/sin_440_square_movement.wav"
+    # cvs_file = "csv/sin_source_square.csv"
+    # output_filename = "audio_output/sin_440_square_movement.wav"
     output_flag = True
-    generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
+    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
 
-    # Example 2: generating audio file for circular movements of sine tone and piano tune
-    source_array = ["audio_sources/sin_440.wav", "audio_sources/piano.wav"]
-    cvs_array = ["csv/sin_source_circular.csv", "csv/piano_source_circular.csv"]
-    output_filename = "audio_output/sin_440_and_piano_circular_movement.wav"
-    generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, output_filename)
+    # # Example 2: generating audio file for circular movements of sine tone and piano tune
+    # source_array = ["audio_sources/sin_440.wav", "audio_sources/piano.wav"]
+    # cvs_array = ["csv/sin_source_circular_xy.csv", "csv/piano_source_circular.csv"]
+    # output_filename = "audio_output/sin_440_and_piano_circular_movement.wav"
+    # generate_audio_for_multiple_sources(HRTF_path, source_array, cvs_array, output_filename)
 
+    # # Example 3: generating audio file for circular movement of sine tone
+    # source_file = "audio_sources/sin_440.wav"
+    # cvs_file = "csv/sin_source_circular_xy.csv"
+    # output_filename = "audio_output/sin_440_circular_movement_xy.wav"
+    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
+
+    cvs_file = "csv/sin_source_circular_xz.csv"
+    output_filename = "audio_output/sin_440_circular_movement_xz_ARI.wav"
+    generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)    
+
+    # cvs_file = "csv/sin_source_circular_yz.csv"
+    # output_filename = "audio_output/sin_440_circular_movement_yz_ARI.wav"
+    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
