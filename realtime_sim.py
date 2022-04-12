@@ -4,7 +4,6 @@ import pyaudio
 import wave
 import time
 import math
-import keyboard
 import sofa
 import numpy as np
 from scipy import signal
@@ -14,18 +13,39 @@ from scipy.io.wavfile import write
 from pynput import keyboard
 import pandas as pd
 
+
+#Instead of using blocking read/write in pyaudio, use a callback function in place to generate audio when needed
+# https://stackoverflow.com/questions/62618934/pyaudio-how-to-access-stream-read-data-in-callback-non-blocking-mode
+
 class AudioStream:
-    def __init__(self, file, numchannels=1):
+
+    def __init__(self, file, numchannels, output_flag = 0):
         """ Initialize """
         self.wf = wave.open(file, 'rb')
         self.p = pyaudio.PyAudio()
 
-        self.stream = self.p.open(
-            format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
-            channels = numchannels, # 1 channel
-            rate = self.wf.getframerate(), # 44100 Hz
-            output = True
-        )
+        if(output_flag == 0):
+            self.stream = self.p.open(
+                format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
+                channels = numchannels, 
+                rate = self.wf.getframerate(), # 44100 Hz
+                output = True,
+            )
+        else:
+            self.stream = self.p.open(
+                format = self.p.get_format_from_width(self.wf.getsampwidth()), # 16-bit int
+                channels = numchannels, 
+                rate = self.wf.getframerate(), # 44100 Hz
+                output = True,
+                stream_callback=callback
+            )
+        
+        self.stream.start_stream()
+        while self.stream.is_active():
+            time.sleep(5)
+            self.stream.stop_stream()
+        
+        self.stream.close()
 
     def play(self):
         """ Play entire file """
@@ -114,22 +134,28 @@ class Scene:
         self.HRTF = HRTFFile(HRTFFilename)
         #self.sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
         #self.sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
-        self.sources = [Source(0, 0, -5, "sin_300.wav")]
-        self.stream = AudioStream("sin_300.wav", 2)
+        self.sources = [Source(0, 0, -5, "sweep.wav")]
+        self.stream = AudioStream("sin_300.wav", 2, 1)
         self.chunkSize = 4096
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
 
     def begin(self):
-        """ Continuously generate and queue next chunk """"
+        """ Continuously generate and queue next chunk """
         while ~self.exit:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
             print("POSITION x=", x, " y=", y, " z=", z)
             print("ANGLES az = ", az, " el = ", el)
+
+            #Callback version
+
+            #Blocking Version
+            """
             convolved = self.generateChunk()
             self.stream.stream.write(convolved)
+            """
             #time.sleep(2)
 
     def quit(self):
@@ -138,6 +164,7 @@ class Scene:
 
     def generateChunk(self):
         """" Generate an audio chunk """
+
         flag = 0
         for currSource in self.sources:
             data = currSource.getNextChunk(self.chunkSize)
@@ -147,8 +174,12 @@ class Scene:
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
             
             #TODO attenuation/distance scaling doesn't work with one source
-            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full')) * attenuation
-            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full')) * attenuation
+            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
+            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
+
+            convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(50), mode='same'))
+            convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(50), mode='same'))
+            
             convolved = np.array([convolved1, convolved2]).T
 
             if(flag==0):
@@ -161,8 +192,9 @@ class Scene:
         convolved_normalized = summed / norm
         num_bit = 16
         bit_depth = 2 ** (num_bit-1)
-        convolved_final = np.int16(summed / np.max(np.abs(summed)) * (bit_depth-1))
+        convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
         interleaved = convolved_final.flatten()
+        
 
         return interleaved.tobytes()
 
@@ -207,7 +239,7 @@ class Scene:
                 elevation = 90
         else:
             elevation = math.degrees(math.atan(numerator / denominator))
-            
+
         if(elevation > 90):
             elevation = 180 - elevation
         if(elevation <-90):
@@ -233,7 +265,7 @@ class Source:
         channel_sounds = segment.split_to_mono()
         samples = [s.get_array_of_samples() for s in channel_sounds]
         self.audioArray = np.array(samples).T
-        self.stream = AudioStream(filename)
+        self.stream = AudioStream(filename, 1, 0)
     
     def getPos(self):
         """ Access position data """
@@ -277,15 +309,51 @@ def on_press(key):
         else:
             print("unknown input")
 
+def callback(in_data, frame_count, time_info, status):
+    flag = 0
+    global currentScene
+    for currSource in currentScene.sources:
+        data = currSource.getNextChunk(currentScene.chunkSize)
+        data_np = np.frombuffer(data, dtype=np.uint16)
+
+        [azimuth, elevation, attenuation] = currentScene.getAngles(currSource)
+        [hrtf1, hrtf2] = currentScene.HRTF.getIR(azimuth, elevation)
+        
+        #TODO attenuation/distance scaling doesn't work with one source
+        convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
+        convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
+
+        convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(50), mode='same'))
+        convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(50), mode='same'))
+        
+        convolved = np.array([convolved1, convolved2]).T
+
+        if(flag==0):
+            summed = convolved
+            flag = 1
+        else:
+            summed = summed + convolved
+    
+    norm = np.linalg.norm(summed)
+    convolved_normalized = summed / norm
+    num_bit = 16
+    bit_depth = 2 ** (num_bit-1)
+    convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
+    interleaved = convolved_final.flatten()
+
+    return [interleaved.tobytes(), pyaudio.paContinue]
+
+
+
 #Azimuth - 0 to 360 counterclockwise, 0 in front
 #Elevation - -90 to 0 to 90
-if __name__ == "__main__":
-    global_listener = Listener()
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
 
-    currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
-    currentScene.begin()
+global_listener = Listener()
+listener = keyboard.Listener(on_press=on_press)
+listener.start()
+
+currentScene = Scene("sin_440.wav", "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
+currentScene.begin()
 
 ## TODO Scene(), Source() Figure out format for Source object files.
     ## Each source object should have some kind of txt or csv file containing info on its audio file and position data
