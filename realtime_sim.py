@@ -147,17 +147,17 @@ class Scene:
         flag = 0
         for currSource in self.sources:
             data = currSource.getNextChunk(self.chunkSize)
-            data_np = np.frombuffer(data, dtype=np.uint16)
+            data_np = np.frombuffer(data, dtype=np.int16)
 
             [azimuth, elevation, attenuation] = self.getAngles(currSource)
             [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
             
             #TODO attenuation/distance scaling doesn't work with one source
-            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
-            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
+            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full')) * attenuation
+            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full')) * attenuation
 
-            #convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(5), mode='same'))
-            #convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(5), mode='same'))
+            #convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(10), mode='same'))
+            #convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(10), mode='same'))
             
             convolved = np.array([convolved1, convolved2]).T
 
@@ -259,6 +259,13 @@ class Source:
 
 def on_press(key):
     """ Add key listeners to main """
+
+    """ 
+    Arrow Keys move user around the horizontal plane (X and Y directions)
+    Space moves user up in space, Shift moves user down in space (Z direction)
+    W tilts users head up, S tilts users head down (Pitch)
+    A tilts users head to the left, D tilts users head to the right (Yaw)
+    """
     global global_listener
     try:    
         if(key.char == 'w'):
