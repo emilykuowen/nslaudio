@@ -5,6 +5,7 @@ import wave
 import time
 import math
 import sofa
+import scipy
 import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ from scipy.io.wavfile import write
 from pynput import keyboard
 import pandas as pd
 
+outputData = np.array([])
 
 #Instead of using blocking read/write in pyaudio, use a callback function in place to generate audio when needed
 # https://stackoverflow.com/questions/62618934/pyaudio-how-to-access-stream-read-data-in-callback-non-blocking-mode
@@ -126,27 +128,38 @@ class Scene:
 
     def begin(self):
         """ Continuously generate and queue next chunk """
-        while ~self.exit:
+        while self.exit==False:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
             #print("POSITION x=", x, " y=", y, " z=", z)
             #print("ANGLES az = ", az, " el = ", el)
-            start = time.time()
+
             convolved = self.generateChunk()
+            if convolved == 'flag':
+                continue
+
             self.stream.stream.write(convolved)
-            end = time.time()
-            print(end- start)
-            #time.sleep(2)
 
     def quit(self):
         """ Exit the Scene """
         self.exit = True
+        global outputData
+        pd.DataFrame(outputData).to_csv("realtimeCheck.csv")
+        self.stream.close()
+        scipy.io.wavfile.write('realtime_output.wav', 44100, outputData)
+        
 
     def generateChunk(self):
         """" Generate an audio chunk """
+        global outputData
         flag = 0
         for currSource in self.sources:
             data = currSource.getNextChunk(self.chunkSize)
+            
+            if data == b'':
+                self.quit()
+                return 'flag'
+
             data_np = np.frombuffer(data, dtype=np.int16)
 
             [azimuth, elevation, attenuation] = self.getAngles(currSource)
@@ -155,9 +168,6 @@ class Scene:
             #TODO attenuation/distance scaling doesn't work with one source
             convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='full')) * attenuation
             convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='full')) * attenuation
-
-            #convolved1 = np.array(signal.fftconvolve(convolved1, signal.windows.hamming(10), mode='same'))
-            #convolved2 = np.array(signal.fftconvolve(convolved2, signal.windows.hamming(10), mode='same'))
             
             convolved = np.array([convolved1, convolved2]).T
 
@@ -173,8 +183,14 @@ class Scene:
         bit_depth = 2 ** (num_bit-1)
         convolved_final = np.int16(convolved_normalized / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
         interleaved = convolved_final.flatten()
-
-        return interleaved.tobytes()
+        
+        #Handle wav file output
+        if outputData.size == 0:
+            outputData = convolved_final
+        else:
+            outputData = np.append(outputData, convolved_final, axis=0)
+            
+        return interleaved
 
     def getAngles(self, source):
         """ Calculate azimuth and elevation angle from listener to object """
