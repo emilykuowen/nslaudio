@@ -335,13 +335,15 @@ def on_press(key):
 
 #Azimuth - 0 to 360 counterclockwise, 0 in front
 #Elevation - -90 to 0 to 90
+
+#TODO Current version only accepts sources that are all the same length, add in something to handle if this is not the case?
 if __name__ == "__main__":
     global_listener = Listener()
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
     #sources = [Source(0, 0, 0, "audio_sources/sin_440.wav"), Source(5, 0, 0, "audio_sources/sweep.wav"), Source(-3, -3, 0, "audio_sources/sin_600Hz.wav")]
-    sources = [Source(-5, -5, 0, "audio_sources/sin_300.wav"), Source(5, 5, 0, "audio_sources/sin_500.wav")]
+    sources = [Source(-5, -5, 0, "audio_sources/sin_500.wav"), Source(5, 5, 0, "audio_sources/sin_300.wav")]
     #sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
     currentScene = Scene(sources, "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
