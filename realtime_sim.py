@@ -1,8 +1,5 @@
-import csv
-import wave
 import pyaudio
 import wave
-import time
 import math
 import sofa
 import scipy
@@ -155,7 +152,7 @@ class Scene:
         global outputData
         pd.DataFrame(outputData).to_csv("realtimeCheck.csv")
         self.stream.close()
-        scipy.io.wavfile.write('realtime_output.wav', 44100, outputData)
+        scipy.io.wavfile.write('autio_output/realtime_output.wav', 44100, outputData)
         self.stream.p.terminate()
 
     def generateChunk(self):
@@ -343,8 +340,8 @@ if __name__ == "__main__":
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
-    #sources = [Source(0, 0, 0, "sin_440.wav"), Source(5, 0, 0, "sweep.wav"), Source(-3, -3, 0, "sin_600Hz.wav")]
-    sources = [Source(-5, -5, 0, "sin_300.wav"), Source(5, 5, 0, "sin_500.wav")]
+    #sources = [Source(0, 0, 0, "audio_sources/sin_440.wav"), Source(5, 0, 0, "audio_sources/sweep.wav"), Source(-3, -3, 0, "audio_sources/sin_600Hz.wav")]
+    sources = [Source(-5, -5, 0, "audio_sources/sin_300.wav"), Source(5, 5, 0, "audio_sources/sin_500.wav")]
     #sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
     currentScene = Scene(sources, "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
