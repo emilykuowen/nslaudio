@@ -150,7 +150,6 @@ class Scene:
         """ Exit the Scene """
         self.exit = True
         global outputData
-        pd.DataFrame(outputData).to_csv("realtimeCheck.csv")
         self.stream.close()
         scipy.io.wavfile.write('autio_output/realtime_output.wav', 44100, outputData)
         self.stream.p.terminate()
