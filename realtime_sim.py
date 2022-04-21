@@ -12,12 +12,18 @@ import matplotlib.pyplot as plt
 from pydub import AudioSegment
 from scipy.io.wavfile import write
 from pynput import keyboard
-import pandas as pd
+#import pandas as pd
 
 outputData = np.array([])
-
-#Instead of using blocking read/write in pyaudio, use a callback function in place to generate audio when needed
-# https://stackoverflow.com/questions/62618934/pyaudio-how-to-access-stream-read-data-in-callback-non-blocking-mode
+"""
+TODO:
+1. Compare real time and stored with same chunk size
+2. Look at 3dti code to see if they smooth between chunks
+3. Create HRIR mapping in findMeasurement() instead of for loop
+4. Deal with input being mono vs. stereo
+5. Add in listener movement in stored version
+6. Add in roll
+"""
 
 class AudioStream:
     def __init__(self, file, numchannels=1):
@@ -144,7 +150,7 @@ class Scene:
         """ Exit the Scene """
         self.exit = True
         global outputData
-        pd.DataFrame(outputData).to_csv("realtimeCheck.csv")
+        #pd.DataFrame(outputData).to_csv("realtimeCheck.csv")
         self.stream.close()
         scipy.io.wavfile.write('realtime_output.wav', 44100, outputData)
         
@@ -190,7 +196,7 @@ class Scene:
         else:
             outputData = np.append(outputData, convolved_final, axis=0)
             
-        return interleaved
+        return interleaved.tobytes()
 
     def getAngles(self, source):
         """ Calculate azimuth and elevation angle from listener to object """
