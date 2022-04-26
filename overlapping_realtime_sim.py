@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pydub import AudioSegment
 from scipy.io.wavfile import write
 from pynput import keyboard
-import pandas as pd
+#import pandas as pd
 
 outputData = np.array([])
 
@@ -131,8 +131,8 @@ class Scene:
         self.fs = 44100
         self.exit = False
         self.lastChunk = None
-        self.buff_processed = np.array([])
         self.buff = np.array([])
+        self.buff_processed = np.array([])
 
     def begin(self):
         """ Continuously generate and queue next chunk """
@@ -211,11 +211,11 @@ class Scene:
         convolved_normalized_scaled_BC = convolved_normalized_BC * (original_max / (bit_depth - 1))
         convolved_final_BC = np.int16( (convolved_normalized_scaled_BC) / np.max(np.abs(convolved_normalized_BC)) * (bit_depth-1)) 
 
-        #Handle first frame
-        if(np.size(self.buff)==0):
+        # handle first frame
+        if(np.size(self.buff) == 0):
             self.buff = data_BC
             self.buff_processed = summed_BC
-            self.stream.stream.write(convolved_final_BC.flatten())
+            self.stream.stream.write(convolved_final_BC.flatten().tobytes())
             return 0
 
         data_A = self.buff[:, int(self.chunkSize/2):]
@@ -271,7 +271,7 @@ class Scene:
         #TODO - here use original_max_AB or original_max for scaling? or max of both
         convolved_normalized_scaled_A = convolved_normalized_A * (max(original_max, original_max_AB) / (bit_depth - 1))
         convolved_final_A = np.int16( (convolved_normalized_scaled_A) / np.max(np.abs(convolved_normalized_A)) * (bit_depth-1))
-        self.stream.stream.write(convolved_final_A.flatten())
+        self.stream.stream.write(convolved_final_A.flatten().tobytes())
 
         frame_B_1 = windowed_AB_1[int(self.chunkSize/2):] + windowed_BC_1[:int(self.chunkSize/2)]
         frame_B_2 = windowed_AB_2[int(self.chunkSize/2):] + windowed_BC_2[:int(self.chunkSize/2)]
@@ -281,7 +281,7 @@ class Scene:
         #TODO - here use original_max_AB or original_max for scaling? or max of both
         convolved_normalized_scaled_B = convolved_normalized_B * (max(original_max, original_max_AB) / (bit_depth - 1))
         convolved_final_B = np.int16( (convolved_normalized_scaled_B) / np.max(np.abs(convolved_normalized_B)) * (bit_depth-1))
-        self.stream.stream.write(convolved_final_B.flatten())
+        self.stream.stream.write(convolved_final_B.flatten().tobytes())
 
         self.buff = data_BC
         self.buff_processed = summed_BC

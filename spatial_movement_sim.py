@@ -239,10 +239,10 @@ if __name__ == '__main__':
     # Example 1: generating audio file for square movement of sine tone
     HRTF_path = "hrtf/dtf_nh2.sofa"
     source_file = "audio_sources/sin_440.wav"
-    # cvs_file = "csv/sin_source_square.csv"
-    # output_filename = "audio_output/sin_440_square_movement.wav"
+    cvs_file = "csv/sin_source_circular_xy.csv"
+    output_filename = "audio_output/sin_440_circular_movement_xy_precise.wav"
     output_flag = True
-    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
+    generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
 
     # # Example 2: generating audio file for circular movements of sine tone and piano tune
     # source_array = ["audio_sources/sin_440.wav", "audio_sources/piano.wav"]
@@ -256,9 +256,9 @@ if __name__ == '__main__':
     # output_filename = "audio_output/sin_440_circular_movement_xy.wav"
     # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
 
-    cvs_file = "csv/sin_source_circular_xz.csv"
-    output_filename = "audio_output/sin_440_circular_movement_xz_ARI.wav"
-    generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)    
+    # cvs_file = "csv/sin_source_circular_xz.csv"
+    # output_filename = "audio_output/sin_440_circular_movement_xz_ARI.wav"
+    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)    
 
     # cvs_file = "csv/sin_source_circular_yz.csv"
     # output_filename = "audio_output/sin_440_circular_movement_yz_ARI.wav"

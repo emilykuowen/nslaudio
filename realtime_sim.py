@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pydub import AudioSegment
 from scipy.io.wavfile import write
 from pynput import keyboard
-import pandas as pd
+#import pandas as pd
 
 outputData = np.array([])
 
@@ -130,7 +130,7 @@ class Scene:
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
-        self.lastChunk = None
+        #self.lastChunk = None
 
     def begin(self):
         """ Continuously generate and queue next chunk """
@@ -151,7 +151,7 @@ class Scene:
         self.exit = True
         global outputData
         self.stream.close()
-        scipy.io.wavfile.write('autio_output/realtime_output.wav', 44100, outputData)
+        scipy.io.wavfile.write('audio_output/realtime_output.wav', 44100, outputData)
         self.stream.p.terminate()
 
     def generateChunk(self):
@@ -177,8 +177,8 @@ class Scene:
             convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
             convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
 
-            #convolved1 = signal.fftconvolve(convolved1, signal.hamming(10), mode = 'full')
-            #convolved2 = signal.fftconvolve(convolved2, signal.hamming(10), mode = 'full')
+            # convolved1 = np.array(convolved1 * signal.hamming(len(convolved1)))
+            # convolved2 = np.array(convolved2 * signal.hamming(len(convolved2)))
             
             convolved = np.array([convolved1, convolved2]).T
 
@@ -197,15 +197,15 @@ class Scene:
 
         convolved_final = np.int16( (convolved_normalized_scaled) / np.max(np.abs(convolved_normalized)) * (bit_depth-1)) 
         
-        if (self.lastChunk is not None):
-            combined = np.append(self.lastChunk, convolved_final)
+        # if (self.lastChunk is not None):
+        #     combined = np.append(self.lastChunk, convolved_final)
 
-            #b, a = signal.butter(5, [44100/2], 'lowpass', False)
-            #convolved1 = signal.lfilter(b, a, combined[1, :])
-            #convolved2 = signal.lfilter(b, a, combined[2, :])
-            #convolved_final = np.array([convolved1, convolved2]).T        
+        #     #b, a = signal.butter(5, [44100/2], 'lowpass', False)
+        #     #convolved1 = signal.lfilter(b, a, combined[1, :])
+        #     #convolved2 = signal.lfilter(b, a, combined[2, :])
+        #     #convolved_final = np.array([convolved1, convolved2]).T        
 
-        self.lastChunk = convolved_final
+        # self.lastChunk = convolved_final
         
         if outputData.size == 0:
             outputData = convolved_final
@@ -332,8 +332,8 @@ def on_press(key):
         else:
             print("unknown input")
 
-#Azimuth - 0 to 360 counterclockwise, 0 in front
-#Elevation - -90 to 0 to 90
+# azimuth - 0 to 360 counterclockwise, 0 in front
+# elevation - -90 to 0 to 90
 
 #TODO Current version only accepts sources that are all the same length, add in something to handle if this is not the case?
 if __name__ == "__main__":
