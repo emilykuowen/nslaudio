@@ -357,11 +357,11 @@ def on_press(key):
     try:    
         if(key.char == 'w'):
             global_listener.update(0, 0, 0, 0, 10)
-        if(key.char == 'a'):
+        elif(key.char == "a"):
             global_listener.update(0, 0, 0, -10, 0)
-        if(key.char == 's'):
+        elif(key.char == "s"):
             global_listener.update(0, 0, 0, 0, -10)
-        if(key.char == 'd'):
+        elif(key.char == "d"):
             global_listener.update(0, 0, 0, 10, 0)
         else:
             print("unknown input")
@@ -392,7 +392,16 @@ if __name__ == "__main__":
 
     #sources = [Source(0, 0, 0, "audio_sources/sin_440.wav"), Source(5, 0, 0, "audio_sources/sweep.wav"), Source(-3, -3, 0, "audio_sources/sin_600Hz.wav")]
     #sources = [Source(-5, -5, 0, "audio_sources/sin_500.wav"), Source(5, 5, 0, "audio_sources/sin_300.wav")]
-    sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
+    #sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
+    sources = [
+        Source(0, -5, 0, "audio_sources/piano_concerto/10_Spot_Bass_mono.wav"),
+        Source(-5, 0, 0, "audio_sources/piano_concerto/09_Spot_Cello_mono.wav"),
+        Source(5, 0, 0, "audio_sources/piano_concerto/08_Spot_Viola_mono.wav"),
+        Source(0, 5, 0, "audio_sources/piano_concerto/07_Spot_Violin2_mono.wav"),
+        Source(0, 0, 5, "audio_sources/piano_concerto/06_Spot_Violin1_mono.wav"),
+        Source(0, 0, -5, "audio_sources/piano_concerto/05_Spot_Woodwind_mono.wav"),
+        Source(0, 0, 0, "audio_sources/piano_concerto/04_Spot_Piano_mono.wav"),
+        ]
     currentScene = Scene(sources, "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
 
