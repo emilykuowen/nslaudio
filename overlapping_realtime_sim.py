@@ -195,6 +195,10 @@ class Scene:
                 # append each source to a new row
                 data_BC = np.append(data_BC, [data_np], axis=0)
 
+            if(np.size(data_BC)<self.chunkSize):
+                self.quit()
+                return
+
             temp_max_BC = np.max(abs(data_np))
             if(temp_max_BC > max_BC):
                 max_BC = temp_max_BC
