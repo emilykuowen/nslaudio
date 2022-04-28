@@ -12,8 +12,6 @@ from scipy.io.wavfile import write
 from pynput import keyboard
 #import pandas as pd
 
-outputData = np.array([])
-
 class OutputStream:
     def __init__(self):
         """ Initialize """
@@ -125,36 +123,52 @@ class Scene:
         self.listener = global_listener
         self.HRTF = HRTFFile(HRTFFilename)
         self.sources = sources
-        self.stream = OutputStream()
+        self.outputStream = OutputStream()
         self.chunkSize = 4096
         self.timeIndex = 0
         self.fs = 44100
         self.exit = False
         self.lastChunk = None
-        self.buff = np.array([])
-        self.buff_processed = np.array([])
+        self.buff = None
+        self.buff_processed = None
 
     def begin(self):
         """ Continuously generate and queue next chunk """
         while self.exit==False:
             [x, y, z] = self.listener.getPos()
             [az, el] = self.listener.getAngles()
-            #print("POSITION x=", x, " y=", y, " z=", z)
-            #print("ANGLES az = ", az, " el = ", el)
+            # print("POSITION x=", x, " y=", y, " z=", z)
+            # print("ANGLES az = ", az, " el = ", el)
 
             stop_flag = self.generateChunk()
             if stop_flag == 1:
                 continue
 
-            #self.stream.stream.write(convolved)
-
     def quit(self):
         """ Exit the Scene """
         self.exit = True
-        global outputData
-        self.stream.close()
-        scipy.io.wavfile.write('audio_output/realtime_output.wav', 44100, outputData)
-        self.stream.p.terminate()
+        self.outputStream.close()
+        self.outputStream.p.terminate()
+
+    def generateSourceAudio(self, currSource, sourceAudio):
+        [azimuth, elevation, attenuation] = self.getAngles(currSource)
+        [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
+        convolved1 = np.array(signal.fftconvolve(sourceAudio, hrtf1, mode='same')) * attenuation
+        convolved2 = np.array(signal.fftconvolve(sourceAudio, hrtf2, mode='same')) * attenuation
+        convolved = np.array([convolved1, convolved2]).T
+        return convolved
+
+    def normalizeAudio(self, audio, max):
+        norm = np.linalg.norm(audio)
+        convolved_normalized = (audio / norm) 
+        num_bit = 16
+        bit_depth = 2 ** (num_bit-1)
+        convolved_normalized_scaled = convolved_normalized * (max / (bit_depth - 1))
+        convolved_final = np.int16((convolved_normalized_scaled) / np.max(np.abs(convolved_normalized)) * (bit_depth-1))
+        return convolved_final
+    
+    def writeToStream(self, audio):
+        self.outputStream.stream.write(audio.flatten().tobytes())
 
     def generateChunk(self):
         """" Generate an audio chunk """
@@ -168,130 +182,82 @@ class Scene:
         # ZA is the last full chunk read in [nonconvolved, nonwindowed], stored in buff
         # generateChunk)() writes half chunks A and B to stream, then saves convolved/windowed and nonconvolved/nonwindowed versions to Scene object
 
-        global outputData
-        flag = 0
-        original_max = 0
         data_BC = None
+        max_BC = 0
+        summed_BC = None
 
         for currSource in self.sources:
             data = currSource.getNextChunk(self.chunkSize)
-            
-            if data == b'':
-                self.quit()
-                return 1
-
-            data_np = np.frombuffer(data, dtype=np.int16)
+            data_np = np.frombuffer(data, dtype=np.int16) # interpret buffer as a 1D array
             if(data_BC is None):
-                data_BC = [data_np]
+                data_BC = np.array([data_np])
             else:
+                # append each source to a new row
                 data_BC = np.append(data_BC, [data_np], axis=0)
 
-            temp_max = np.max(abs(data_np))
-            if(temp_max > original_max):
-                original_max = temp_max
+            temp_max_BC = np.max(abs(data_np))
+            if(temp_max_BC > max_BC):
+                max_BC = temp_max_BC
 
-            [azimuth, elevation, attenuation] = self.getAngles(currSource)
-            [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
-
-            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
-            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
-            
-            convolved = np.array([convolved1, convolved2]).T
-
-            if(flag==0):
+            convolved = self.generateSourceAudio(currSource, data_np)
+            if(summed_BC is None):
                 summed_BC = convolved
-                flag = 1
             else:
-                summed_BC = summed_BC + convolved
+                summed_BC += convolved
 
-        norm = np.linalg.norm(summed_BC)
-        convolved_normalized_BC = (summed_BC / norm) 
-        num_bit = 16
-        bit_depth = 2 ** (num_bit-1)
-        convolved_normalized_scaled_BC = convolved_normalized_BC * (original_max / (bit_depth - 1))
-        convolved_final_BC = np.int16( (convolved_normalized_scaled_BC) / np.max(np.abs(convolved_normalized_BC)) * (bit_depth-1)) 
+        convolved_BC = self.normalizeAudio(summed_BC, max_BC)
 
-        # handle first frame
-        if(np.size(self.buff) == 0):
+        # handle the first frame
+        if(self.buff is None):
             self.buff = data_BC
             self.buff_processed = summed_BC
-            self.stream.stream.write(convolved_final_BC.flatten().tobytes())
-            return 0
+            self.writeToStream(convolved_BC)
+            return 0 # exit the function after writing to the first frame
 
-        data_A = self.buff[:, int(self.chunkSize/2):]
-        data_B = data_BC[:, :int(self.chunkSize/2)]
+        half_chunkSize = int(self.chunkSize/2)
+        data_A = self.buff[:, half_chunkSize:] # second half of ZA = A
+        data_B = data_BC[:, :half_chunkSize] # first half BC = B
         data_AB = np.append(data_A, data_B, axis=1)
 
-        #Redo convolutions for overlapping frame AB
-        index = 0
-        flag = 0
-        original_max_AB = 0
-        for currSource in self.sources:
-            data = data_AB[index][:]
-            index=index+1
-            
-            if data == b'':
-                self.quit()
-                return 1
+        max_A = 0
+        max_B = 0
+        summed_AB = None
 
+        for index, currSource in enumerate(self.sources):
+            data = data_AB[index][:] # raw data of each source
             data_np = np.frombuffer(data, dtype=np.int16)
 
-            temp_max = np.max(abs(data_np))
-            if(temp_max > original_max_AB):
-                original_max_AB = temp_max
-
-            [azimuth, elevation, attenuation] = self.getAngles(currSource)
-            [hrtf1, hrtf2] = self.HRTF.getIR(azimuth, elevation)
-
-            convolved1 = np.array(signal.fftconvolve(data_np, hrtf1, mode='same')) * attenuation
-            convolved2 = np.array(signal.fftconvolve(data_np, hrtf2, mode='same')) * attenuation
+            half_len = int(len(data_np)/2)
+            temp_max_A = np.max(abs(data_np[:half_len])) # calculate the max value from the first half
+            temp_max_B = np.max(abs(data_np[half_len:])) # calculate the max value from the second half
+            if(temp_max_A > max_A):
+                max_A = temp_max_A
+            if(temp_max_B > max_B):
+                max_B = temp_max_B
             
-            convolved = np.array([convolved1, convolved2]).T
-
-            if(flag==0):
+            convolved = self.generateSourceAudio(currSource, data_np)
+            if summed_AB is None:
                 summed_AB = convolved
-                flag = 1
             else:
-                summed_AB = summed_AB + convolved
+                summed_AB += convolved
 
-        windowed_ZA_1 = self.buff_processed[:, 0] * np.array(signal.windows.hamming(self.chunkSize))
-        windowed_ZA_2 = self.buff_processed[:, 1] * signal.windows.hamming(self.chunkSize)
+        # TODO: try changing the window
+        window = np.array([signal.windows.hamming(self.chunkSize)]).T
+        windowed_ZA = self.buff_processed * window # last BC convolved sum
+        windowed_BC = summed_BC * window # new BC convolved sum
+        windowed_AB = summed_AB * window # new AB convolved sum
 
-        windowed_BC_1 = summed_BC[:, 0] * signal.windows.hamming(self.chunkSize)
-        windowed_BC_2 = summed_BC[:, 1] * signal.windows.hamming(self.chunkSize)
+        frame_A = windowed_ZA[half_chunkSize:, :] + windowed_AB[:half_chunkSize, :]
+        convolved_A = self.normalizeAudio(frame_A, max_A)
+        self.writeToStream(convolved_A)
 
-        windowed_AB_1 = summed_AB[:, 0] * signal.windows.hamming(self.chunkSize)
-        windowed_AB_2 = summed_AB[:, 1] * signal.windows.hamming(self.chunkSize)
-
-        frame_A_1 = windowed_ZA_1[int(self.chunkSize/2):] + windowed_AB_1[:int(self.chunkSize/2)]
-        frame_A_2 = windowed_ZA_2[int(self.chunkSize/2):] + windowed_AB_2[:int(self.chunkSize/2)]
-        frame_A = np.array([frame_A_1, frame_A_2]).T
-        norm_A = np.linalg.norm(frame_A)
-        convolved_normalized_A = (frame_A / norm_A) 
-        #TODO - here use original_max_AB or original_max for scaling? or max of both
-        convolved_normalized_scaled_A = convolved_normalized_A * (max(original_max, original_max_AB) / (bit_depth - 1))
-        convolved_final_A = np.int16( (convolved_normalized_scaled_A) / np.max(np.abs(convolved_normalized_A)) * (bit_depth-1))
-        self.stream.stream.write(convolved_final_A.flatten().tobytes())
-
-        frame_B_1 = windowed_AB_1[int(self.chunkSize/2):] + windowed_BC_1[:int(self.chunkSize/2)]
-        frame_B_2 = windowed_AB_2[int(self.chunkSize/2):] + windowed_BC_2[:int(self.chunkSize/2)]
-        frame_B = np.array([frame_B_1, frame_B_2]).T
-        norm_B = np.linalg.norm(frame_B)
-        convolved_normalized_B = (frame_B / norm_B)
-        #TODO - here use original_max_AB or original_max for scaling? or max of both
-        convolved_normalized_scaled_B = convolved_normalized_B * (max(original_max, original_max_AB) / (bit_depth - 1))
-        convolved_final_B = np.int16( (convolved_normalized_scaled_B) / np.max(np.abs(convolved_normalized_B)) * (bit_depth-1))
-        self.stream.stream.write(convolved_final_B.flatten().tobytes())
+        frame_B = windowed_AB[half_chunkSize:, :] + windowed_BC[:half_chunkSize, :]
+        convolved_B = self.normalizeAudio(frame_B, max_B)
+        self.writeToStream(convolved_B)
 
         self.buff = data_BC
         self.buff_processed = summed_BC
 
-        #if outputData.size == 0:
-        #    outputData = convolved_final
-        #else:
-        #    outputData = np.append(outputData, convolved_final, axis=0)
-        
-        #self.stream.stream.write(convolved_final.flatten())
         return 0
 
     def getAngles(self, source):
@@ -421,8 +387,8 @@ if __name__ == "__main__":
     listener.start()
 
     #sources = [Source(0, 0, 0, "audio_sources/sin_440.wav"), Source(5, 0, 0, "audio_sources/sweep.wav"), Source(-3, -3, 0, "audio_sources/sin_600Hz.wav")]
-    sources = [Source(-5, -5, 0, "audio_sources/sin_500.wav"), Source(5, 5, 0, "audio_sources/sin_300.wav")]
-    #sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
+    #sources = [Source(-5, -5, 0, "audio_sources/sin_500.wav"), Source(5, 5, 0, "audio_sources/sin_300.wav")]
+    sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
     currentScene = Scene(sources, "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
     currentScene.begin()
 
