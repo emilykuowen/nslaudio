@@ -98,7 +98,7 @@ def get_angle_and_attenuation(source_file):
 
             if azimuth < 0:
                 azimuth = 360 + azimuth
-            print("raw azimuth = ", azimuth)
+            #print("raw azimuth = ", azimuth)
             
             # calculate elevation
             horizontal_distance = math.sqrt(diffX**2 + diffY**2)
@@ -111,13 +111,13 @@ def get_angle_and_attenuation(source_file):
                     elevation = 90
             else:
                 elevation = math.degrees(math.atan(diffZ / horizontal_distance))
-            print("raw atan elevation = ", elevation)
+            #print("raw atan elevation = ", elevation)
 
             if(elevation > 90):
                 elevation = 180 - elevation
             if(elevation < -90):
                 elevation = -180 - elevation
-            print("elevation after flipping = ", elevation)
+            #print("elevation after flipping = ", elevation)
 
             # calculate 3D distance
             distance = math.sqrt(diffX**2 + diffY**2 + diffZ**2)
@@ -125,7 +125,7 @@ def get_angle_and_attenuation(source_file):
                 attenuation = 1.0
             else:
                 attenuation = 1.0 / (distance**2)
-            print("attenuation = ", attenuation)
+            #print("attenuation = ", attenuation)
             
             azimuth_list.append(azimuth)
             elevation_list.append(elevation)
@@ -149,8 +149,8 @@ def generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_fi
 
     # calculate azimuth angle, elevation angle, and attenuation constant for each position
     audio_info = get_angle_and_attenuation(cvs_file)
-    print("processing ", source_file)
-    print(audio_info)
+    #print("processing ", source_file)
+    #print(audio_info)
     position_num = len(audio_info)
     chunk_len = audio_len // position_num
 
@@ -162,8 +162,8 @@ def generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_fi
         elevation = audio_info[i][1]
         attenuation = audio_info[i][2]
         measurement = find_measurement(azimuth, elevation, spherical_source_positions)
-        print("found measurement's azimuth = ", spherical_source_positions[measurement][0])
-        print("found measurement's elevation = ", spherical_source_positions[measurement][1])
+        #print("found measurement's azimuth = ", spherical_source_positions[measurement][0])
+        #print("found measurement's elevation = ", spherical_source_positions[measurement][1])
         hrtf_left = HRTF.Data.IR.get_values(indices={"M":measurement, "R":0, "E":emitter})
         hrtf_right = HRTF.Data.IR.get_values(indices={"M":measurement, "R":1, "E":emitter})
 
@@ -254,12 +254,4 @@ if __name__ == '__main__':
     # source_file = "audio_sources/sin_440.wav"
     # cvs_file = "csv/sin_source_circular_xy.csv"
     # output_filename = "audio_output/sin_440_circular_movement_xy.wav"
-    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)
-
-    # cvs_file = "csv/sin_source_circular_xz.csv"
-    # output_filename = "audio_output/sin_440_circular_movement_xz_ARI.wav"
-    # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)    
-
-    # cvs_file = "csv/sin_source_circular_yz.csv"
-    # output_filename = "audio_output/sin_440_circular_movement_yz_ARI.wav"
     # generate_audio_for_single_source(HRTF_path, source_file, cvs_file, output_filename, output_flag)

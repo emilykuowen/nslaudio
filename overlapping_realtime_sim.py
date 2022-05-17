@@ -104,18 +104,20 @@ class Listener:
         self.xPos = self.xPos + x
         self.yPos = self.yPos + y
         self.zPos = self.zPos + z
+        print("Listener at x = ", self.xPos, " ,y = ", self.yPos, ",z = ", self.zPos)
 
         self.azimuthTilt = self.azimuthTilt + az
         if(self.azimuthTilt < 0):
             self.azimuthTilt = 360 + self.azimuthTilt
-        if(self.azimuthTilt >=360):
+        if(self.azimuthTilt >= 360):
             self.azimuthTilt = self.azimuthTilt - 360
 
         self.elevationTilt = self.elevationTilt + el
         if(self.elevationTilt < -90):
             self.elevationTilt = -180 - self.elevationTilt
-        if(self.elevationTilt >90):
+        if(self.elevationTilt > 90):
             self.elevationTilt = 180 - self.elevationTilt
+        print("azimuth = ", self.azimuthTilt, " ,elevation = ", self.elevationTilt)
 
 class Scene:
     def __init__(self, sources, HRTFFilename, global_listener):
@@ -394,12 +396,12 @@ if __name__ == "__main__":
     #sources = [Source(-5, -5, 0, "audio_sources/sin_500.wav"), Source(5, 5, 0, "audio_sources/sin_300.wav")]
     #sources = [Source(0, 0, -5, "audio_sources/piano_mono.wav")]
     sources = [
-        Source(0, -5, 0, "audio_sources/piano_concerto/10_Spot_Bass_mono.wav"),
-        Source(-5, 0, 0, "audio_sources/piano_concerto/09_Spot_Cello_mono.wav"),
-        Source(5, 0, 0, "audio_sources/piano_concerto/08_Spot_Viola_mono.wav"),
-        Source(0, 5, 0, "audio_sources/piano_concerto/07_Spot_Violin2_mono.wav"),
-        Source(0, 0, 5, "audio_sources/piano_concerto/06_Spot_Violin1_mono.wav"),
-        Source(0, 0, -5, "audio_sources/piano_concerto/05_Spot_Woodwind_mono.wav"),
+        Source(0, -10, 0, "audio_sources/piano_concerto/10_Spot_Bass_mono.wav"),
+        Source(-10, 0, 0, "audio_sources/piano_concerto/09_Spot_Cello_mono.wav"),
+        Source(10, 0, 0, "audio_sources/piano_concerto/08_Spot_Viola_mono.wav"),
+        Source(0, 10, 0, "audio_sources/piano_concerto/07_Spot_Violin2_mono.wav"),
+        Source(0, 0, 10, "audio_sources/piano_concerto/06_Spot_Violin1_mono.wav"),
+        Source(0, 0, -10, "audio_sources/piano_concerto/05_Spot_Woodwind_mono.wav"),
         Source(0, 0, 0, "audio_sources/piano_concerto/04_Spot_Piano_mono.wav"),
         ]
     currentScene = Scene(sources, "hrtf/mit_kemar_normal_pinna.sofa", global_listener)
