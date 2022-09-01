@@ -1,6 +1,6 @@
 # NSL Audio
 
-Codebase for Six Degrees of Freedom Audio Rendering
+Codebase for Six Degrees of Freedom (6DoF) Audio Rendering
 
 ## Installation
 
@@ -8,7 +8,7 @@ Codebase for Six Degrees of Freedom Audio Rendering
 pip install -r requirements.txt
 ```
 
-## Realtime Audio Simulation
+## Real-time Audio Simulation
 Run
 ```bash
 python3 overlapping_realtime_sim.py
@@ -32,7 +32,7 @@ Controls
 - 'W' key         = rotational movement in elevation upward
 - 'S' key         = rotational movement in elevation downward
 
-## Non-Realtime Audio Simulation
+## Offline Audio Simulation
 1. Edit the lines in the main function to set the HRTF set, WAV file of audio source, CVS file of audio source positions, and the output filename.
 ```bash
 HRTF_path = "hrtf/dtf_nh2.sofa"
