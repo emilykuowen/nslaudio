@@ -14,7 +14,7 @@ Run
 python3 overlapping_realtime_sim.py
 ```
 
-Line 396 of overlapping_realtime_sim.py can be edited to change the sound object audio files and positions within the Scene
+Line 396 of overlapping_realtime_sim.py can be edited to change the audio files and positions of the sound objects in the Scene
 ```bash
 Source(-1, 2, -3, "audio_sources/source_audio.wav")
 # creates an object in the scene at x=-1, y=2, z=-3 that reads audio from audio_sources/source_audio.wav
